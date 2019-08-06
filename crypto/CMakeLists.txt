@@ -52,12 +52,25 @@ if (CONFIG_CC310_BACKEND)
                     "(${NRF_CC310_LIB} doesn't exist.)")
   endif()
   add_library(${IMAGE}mbedcrypto_cc310 STATIC IMPORTED GLOBAL)
+  add_library(${IMAGE}mbedcrypto_cc310_platform STATIC IMPORTED GLOBAL)
   set_target_properties(${IMAGE}mbedcrypto_cc310 PROPERTIES IMPORTED_LOCATION
                         "${NRF_CC310_LIB}"
   )
+  set_target_properties(${IMAGE}mbedcrypto_cc310_platform PROPERTIES IMPORTED_LOCATION
+                        "${NRF_CC310_BASE}/${lib_path}/${CC310_FLAVOR}/libnrf_cc310_platform_nrf52840_xxaa.a"
+  )
   target_include_directories(${IMAGE}mbedcrypto_cc310 INTERFACE
                              "${NRF_CC310_BASE}/include/mbedtls")
+                             
+  zephyr_include_directories("${CMAKE_CURRENT_SOURCE_DIR}/nrf_cc310_platform/include")
+
+  zephyr_library_sources(${src_tls}
+                         "${CMAKE_CURRENT_SOURCE_DIR}/nrf_cc310_platform/src/nrf_cc310_platform_abort_zephyr.c"
+                         "${CMAKE_CURRENT_SOURCE_DIR}/nrf_cc310_platform/src/nrf_cc310_platform_mutex_zephyr.c")
+
   target_link_libraries(${IMAGE}mbedcrypto_cc310 INTERFACE ${IMAGE}mbedcrypto_vanilla)
+  zephyr_link_libraries(${IMAGE}mbedcrypto_cc310_platform)
+  
   if (NOT CONFIG_NRF_CRYPTO_BACKEND_COMBINATION_0)
     # Only CC310 backend is selected for mbedtls API.
     # Thus export the alt headers through Zephyr interface library.
