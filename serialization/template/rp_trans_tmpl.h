@@ -40,6 +40,23 @@ struct rp_trans_endpoint {
 	void *_implementation_specific;
 };
 
+/** @brief Prepares data for transport endpoint
+ *
+ * @param _name       Name of the transport endpoint
+ * @param _stack_size Stack size of the thread controling the endpoint (ignored
+ *                    if implementation does not create a thread stack)
+ * @param _prio       Priority of the thread controling the endpoint (ignored
+ *                    if implementation does not set a thread priority)
+ */
+#define RP_TRANS_ENDPOINT_PREPARE(_name, _stack_size, _prio)
+
+/** @brief Initializer for rp_trans_endpoint structure.
+ *
+ * Data for this initialized had to be prepared before with @a RP_TRANS_ENDPOINT
+ * macro.
+ * @param _name       Name of the transport endpoint
+ */
+#define RP_TRANS_ENDPOINT_INITIALIZER(_name)
 
 /** @brief Callback called from endpoint's rx thread when a new packet arrived.
  *
@@ -68,12 +85,9 @@ void rp_trans_uninit(void);
  *
  * @param endpoint        endpoint structure to initialize
  * @param endpoint_number endpoint number the same endpoint on both sides
- * @param stack_size      rx thread stack size. It will be allocated using
- *                        k_alloc().
- * @param prio            rx thread priority
  */
 int rp_trans_endpoint_init(struct rp_trans_endpoint *endpoint,
-	int endpoint_number, size_t stack_size, int prio);
+	int endpoint_number);
 
 
 /** @brief Uninitialize the endpoint

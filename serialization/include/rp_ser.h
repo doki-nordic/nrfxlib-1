@@ -146,12 +146,6 @@ struct rp_ser_decoders {
 struct rp_ser_endpoint {
 	/** Endpoint number. */
 	int number;
-
-	/** Endoint thread stack size. */
-	size_t stack_size;
-
-	/** Endpoint thread priority. */
-	int prio;
 };
 
 /**@brief Remote Procedure Serialization instance. */
@@ -189,10 +183,9 @@ struct rp_ser {
 	static _lock_type RP_CONCAT(_name, _sem);						     \
 	static const struct rp_ser_endpoint RP_CONCAT(_name, _ep) = {				     \
 		.number = _endpoint_num,							     \
-		.stack_size = _endpoint_stack_size,						     \
-		.prio = _endpoint_thread_prio							     \
 	};											     \
 												     \
+	RP_TRANS_ENDPOINT_PREPARE(RP_CONCAT(_name, _ep), _endpoint_stack_size, _endpoint_thread_prio);\
 												     \
 	const struct rp_ser_decoders RP_CONCAT(_name, _decoders) = {				     \
 		.cmd_begin = RP_CONCAT(__start_rp_ser_cmd_decoder_, _name),			     \
@@ -201,7 +194,8 @@ struct rp_ser {
 		.evt_end = RP_CONCAT(__stop_rp_ser_evt_decoder_, _name)				     \
 	};											     \
 												     \
-	static struct rp_ser _name = {			                        	             \
+	static struct rp_ser _name = {								     \
+		.endpoint = RP_TRANS_ENDPOINT_INITIALIZER(RP_CONCAT(_name, _ep)),		     \
 		.decoders = &RP_CONCAT(_name, _decoders),					     \
 		.ep_conf = &RP_CONCAT(_name, _ep),						     \
 		.rp_sem = (void *)&RP_CONCAT(_name, _sem),					     \

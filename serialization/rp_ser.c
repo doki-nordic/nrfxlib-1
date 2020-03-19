@@ -283,9 +283,7 @@ rp_err_t rp_ser_init(struct rp_ser *rp)
 		endpoint_cnt++;
 	}
 
-	return rp_trans_endpoint_init(&rp->endpoint, rp->ep_conf->number,
-				      rp->ep_conf->stack_size,
-				      rp->ep_conf->prio);
+	return rp_trans_endpoint_init(&rp->endpoint, rp->ep_conf->number);
 }
 
 void rp_ser_uninit(struct rp_ser *rp)
