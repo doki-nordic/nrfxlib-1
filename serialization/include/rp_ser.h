@@ -228,16 +228,6 @@ struct rp_ser {
  */
 rp_err_t rp_ser_init(struct rp_ser *rp);
 
-/**@brief Function for uninitializing the Remote Procedure Serialization
- *        instance.
- *
- * This function uninitialize the Remote Procedure instance and abort
- * the endpoint thread.
- *
- * @param[in] rp Remote Procedure instance.
- */
-void rp_ser_uninit(struct rp_ser *rp);
-
 /**@brief Function for sending command(function call) to the Remote processor.
  *
  * This function send procedure call to the Remote processor and waiting for response

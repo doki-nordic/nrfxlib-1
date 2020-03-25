@@ -206,6 +206,12 @@ static void transport_handler(struct rp_trans_endpoint *endpoint,
 	rp_ser_received_data_parse(rp, buf, length);
 }
 
+uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
+	const uint8_t *buf, size_t length)
+{
+	return 0;
+}
+
 rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_encoder *encoder,
 			 cmd_rsp_handler_t rsp)
 {
@@ -275,7 +281,7 @@ rp_err_t rp_ser_init(struct rp_ser *rp)
 	RP_LOG_DBG("Os signal initialized");
 
 	if (!endpoint_cnt) {
-		err = rp_trans_init(transport_handler);
+		err = rp_trans_init(transport_handler, transport_filter);
 		if (err) {
 			return err;
 		}
@@ -284,18 +290,6 @@ rp_err_t rp_ser_init(struct rp_ser *rp)
 	}
 
 	return rp_trans_endpoint_init(&rp->endpoint, rp->ep_conf->number);
-}
-
-void rp_ser_uninit(struct rp_ser *rp)
-{
-	rp_trans_endpoint_uninit(&rp->endpoint);
-
-	if (endpoint_cnt > 0) {
-		endpoint_cnt--;
-	} else {
-		RP_LOG_DBG("Uninitializing RP transport");
-		rp_trans_uninit();
-	}
 }
 
 rp_err_t rp_ser_procedure_initialize(struct rp_ser_encoder *encoder,
