@@ -57,49 +57,17 @@ Command and event encoders/decoders
 
 Module contains an API which helps user to create it own function, event and function response decoders and encoders.
 Command and event decoders are placed in special memory section and should be register using macros: :c:macro:`RP_SER_CMD_DECODER` for command and :c:macro:`RP_SER_EVT_DECODER` for event.
-One Remote Serialization Instance can register up to 255 command and event decoders.
-
-Decoders
---------
-
-Decoders is called automatically when receiving command with matching command value. In case of command decoders, they can
-encode command response and send it back to calling processor.
-
-Decoders registration:
-
-.. code-block:: c
-
-	static rp_err_t entropy_init_handler(CborValue *it)
-	{
-		int err;
-
-		entropy = device_get_binding(CONFIG_ENTROPY_NAME);
-		if (!entropy) {
-			rsp_error_code_sent(-EINVAL);
-
-			return RP_ERROR_INTERNAL;
-		}
-
-		err = rsp_error_code_sent(0);
-		if (err) {
-			return RP_ERROR_INTERNAL;
-		}
-
-		return RP_SUCCESS;
-	}
-
- 	RP_SER_CMD_DECODER(entropy_ser, entropy_init, SER_COMMAND_ENTROPY_INIT,
-			   entropy_init_handler);
+One Remote Procedure Serialization Instance can register up to 255 command and event decoders.
 
 Encoders
 --------
 
-Encoders are using to encode commands, events and command responses into serialized data.
-Creating an encoder is similar for all packet type. In the first step you have to allocate a buffer for serializing data using :c:macro:`rp_ser_buf_alloc`.
-Next use the :cpp:func:`rp_ser_procedure_initialize` to indicate packet type, parameters count and initialize encoder.
-After that you can encode parameters using `TinyCBOR <https://intel.github.io/tinycbor/current/>`_ library. In next step use :cpp:func:`rp_ser_procedure_end` to finish encode data.
+Encoders are using to encode commands, events and command responses into serialized packets.
+Creating an encoder is similar for all packet type. In the first step you have to create and allocate a buffer for serializing data using :c:macro:`rp_ser_buf_alloc`.
+Next use one of the following function :cpp:func:`rp_ser_cmd_init`, :cpp:func:`rp_ser_evt_init` or :cpp:func:`rp_ser_rsp_init` to indicate packet type and initialize encoder.
+After that you can encode parameters using `TinyCBOR <https://intel.github.io/tinycbor/current/>`_ library.
 In last step send packet using one of the sending function.
-In case of command which returns data pass command response decoder callback to sending function.
+In case of command which returns data pass response decoder callback to sending function.
 
 Encoding command:
 
@@ -185,3 +153,35 @@ Encoding command:
 
 		return rsp_data.err_code;
 	}
+
+Decoders
+--------
+
+Decoders is called automatically when receiving command with matching command value.
+In case of command decoders, after calling the desired function, they can also encode returned values and send it back to the calling processor in a Response packet.
+
+Decoders registration:
+
+.. code-block:: c
+
+	static rp_err_t entropy_init_handler(CborValue *it)
+	{
+		int err;
+
+		entropy = device_get_binding(CONFIG_ENTROPY_NAME);
+		if (!entropy) {
+			rsp_error_code_sent(-EINVAL);
+
+			return RP_ERROR_INTERNAL;
+		}
+
+		err = rsp_error_code_sent(0);
+		if (err) {
+			return RP_ERROR_INTERNAL;
+		}
+
+		return RP_SUCCESS;
+	}
+
+ 	RP_SER_CMD_DECODER(entropy_ser, entropy_init, SER_COMMAND_ENTROPY_INIT,
+			   entropy_init_handler);

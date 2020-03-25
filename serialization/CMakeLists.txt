@@ -10,3 +10,5 @@ zephyr_library()
 zephyr_library_sources(rp_ser.c)
 
 zephyr_link_libraries(TINYCBOR)
+
+zephyr_linker_sources(SECTIONS rp_ser.ld)

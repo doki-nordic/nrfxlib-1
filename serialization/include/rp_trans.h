@@ -7,7 +7,7 @@
 #ifndef RP_TRANS_H_
 #define RP_TRANS_H_
 
-#if defined(CONFIG_RMPSG_TRANSPORT)
+#if defined(CONFIG_RPMSG_TRANSPORT)
 
 #include <trans_rpmsg.h>
 

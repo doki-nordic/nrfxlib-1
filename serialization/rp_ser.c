@@ -11,10 +11,20 @@
 #define RP_LOG_MODULE SER_CORE
 #include <rp_log.h>
 
-#define RP_SER_RSP_INITIAL_ARRAY_SIZE 1
-#define RP_SER_CMD_EVT_INITIAL_ARRAY_SIZE 2
+#define RP_SER_RSP_INITIAL_ARRAY_SIZE 2
+#define RP_SER_CMD_EVT_INITIAL_ARRAY_SIZE 3
 
 static uint8_t endpoint_cnt;
+
+static uint8_t *buf_tail_get(struct rp_ser_buf *rp_buf)
+{
+	return rp_buf->buf + rp_buf->packet_size;
+}
+
+static size_t buf_free_space_get(struct rp_ser_buf *rp_buf)
+{
+	return rp_buf->size - rp_buf->packet_size;
+}
 
 static cmd_handler_t cmd_handler_get(struct rp_ser *rp, uint8_t cmd)
 {
@@ -71,53 +81,91 @@ static rp_err_t event_parse(struct rp_ser *rp, uint8_t evt, CborValue *it)
 	return err;
 }
 
-static rp_err_t rp_ser_response_parse(struct rp_ser *rp, CborValue *it)
+static rp_err_t response_parse(struct rp_ser *rp, const uint8_t *data,
+			       size_t len)
 {
 	rp_err_t err;
+	CborParser parser;
+	CborValue value;
+
+	if (len > 0) {
+		if (cbor_parser_init(data, len, 0, &parser, &value) !=
+		    CborNoError) {
+			return RP_ERROR_INTERNAL;
+		    }
+
+		/* Extend paraser to handle more than one item. */
+		value.remaining = UINT32_MAX;
+	}
 
 	if (rp->rsp_handler) {
-		err = rp->rsp_handler(it);
+		err = rp->rsp_handler(&value);
+
+		rp->rsp_handler = NULL;
+
 		if (err) {
 			return err;
 		}
-
-		rp->rsp_handler = NULL;
 	}
 
 	return rp_os_response_signal(rp);
 }
 
-static rp_err_t rp_ser_event_parse(struct rp_ser *rp, CborValue *it)
+static rp_err_t event_dispatch(struct rp_ser *rp, const uint8_t *data,
+			       size_t len)
 {
-	uint8_t event;
+	uint8_t evt;
+	CborParser parser;
+	CborValue value;
+	uint32_t index = 0;
 
-	if (!cbor_value_is_simple_type(it) ||
-	    cbor_value_get_simple_type(it, &event) != CborNoError) {
-		return RP_ERROR_INTERNAL;
+	if (len < 1) {
+		return RP_ERROR_INVALID_PARAM;
 	}
 
-	if (cbor_value_advance_fixed(it) != CborNoError) {
-		return RP_ERROR_INTERNAL;
+	evt = data[index];
+	index++;
+	len -= index;
+
+	if (len > 0) {
+		if (cbor_parser_init(&data[index], len, 0, &parser, &value) !=
+		    CborNoError) {
+			return RP_ERROR_INTERNAL;
+		    }
+
+		value.remaining = UINT32_MAX;
 	}
 
-	return event_parse(rp, event, it);
+	return event_parse(rp, evt, &value);
 }
 
-static rp_err_t rp_ser_cmd_parse(struct rp_ser *rp, CborValue *it)
+static rp_err_t cmd_dispatch(struct rp_ser *rp, const uint8_t *data,
+			     size_t len)
 {
 	rp_err_t err;
 	uint8_t cmd;
+	CborParser parser;
+	CborValue value;
+	uint32_t index = 0;
 
-	if (!cbor_value_is_simple_type(it) ||
-	    cbor_value_get_simple_type(it, &cmd) != CborNoError) {
-		return RP_ERROR_INTERNAL;
+	if (len < 1) {
+		return RP_ERROR_INVALID_PARAM;
 	}
 
-	if (cbor_value_advance_fixed(it) != CborNoError) {
-		return RP_ERROR_INTERNAL;
+	cmd = data[index];
+	index++;
+	len -= index;
+
+	if (len > 0) {
+		if (cbor_parser_init(&data[index], len, 0, &parser, &value) !=
+		    CborNoError) {
+			return RP_ERROR_INTERNAL;
+		    }
+
+		value.remaining = UINT32_MAX;
 	}
 
-	err = cmd_execute(rp, cmd, it);
+	err = cmd_execute(rp, cmd, &value);
 	if (err) {
 		return err;
 	}
@@ -127,52 +175,37 @@ static rp_err_t rp_ser_cmd_parse(struct rp_ser *rp, CborValue *it)
 	return RP_SUCCESS;
 }
 
-static rp_err_t rp_ser_received_data_parse(struct rp_ser *rp,
-					   const uint8_t *data, size_t len)
+static rp_err_t received_data_parse(struct rp_ser *rp,
+				    const uint8_t *data, size_t len)
 {
 	rp_err_t err;
-	CborParser parser;
-	CborValue value;
-	CborValue recursed;
 	uint8_t packet_type;
+	uint32_t index = 0;
 
-	if (cbor_parser_init(data, len, 0, &parser, &value) != CborNoError) {
-		return RP_ERROR_INTERNAL;
+	if (len  < 1) {
+		return RP_ERROR_INVALID_PARAM;
 	}
 
-	if (!cbor_value_is_array(&value)) {
-		return RP_ERROR_INTERNAL;
-	}
-
-	if (cbor_value_enter_container(&value, &recursed) != CborNoError) {
-		return RP_ERROR_INTERNAL;
-	}
-
-	/* Get BLE packet type. */
-	if (!cbor_value_is_simple_type(&recursed) ||
-	    cbor_value_get_simple_type(&recursed,
-				       &packet_type) != CborNoError) {
-		return RP_ERROR_INTERNAL;
-	}
-
-	cbor_value_advance_fixed(&recursed);
+	packet_type = data[index];
+	index++;
+	len -= index;
 
 	switch (packet_type) {
 	case RP_SER_PACKET_TYPE_CMD:
 		RP_LOG_DBG("Command received");
-		err = rp_ser_cmd_parse(rp, &recursed);
+		err = cmd_dispatch(rp, &data[index], len);
 
 		break;
 
 	case RP_SER_PACKET_TYPE_EVENT:
 		RP_LOG_DBG("Event received");
-		err = rp_ser_event_parse(rp, &recursed);
+		err = event_dispatch(rp, &data[index], len);
 
 		break;
 
 	case RP_SER_PACKET_TYPE_RSP:
 		RP_LOG_DBG("Response received");
-		err = rp_ser_response_parse(rp, &recursed);
+		err = response_parse(rp, &data[index], len);
 
 		break;
 
@@ -185,16 +218,6 @@ static rp_err_t rp_ser_received_data_parse(struct rp_ser *rp,
 		return err;
 	}
 
-	/* Be sure that we unpacked all data from the array */
-	if (!cbor_value_at_end(&recursed)) {
-		RP_LOG_ERR("Received more data than expected");
-		return RP_ERROR_INTERNAL;
-	}
-
-	if (cbor_value_leave_container(&value, &recursed) != CborNoError) {
-		return RP_ERROR_INTERNAL;
-	}
-
 	return RP_SUCCESS;
 }
 
@@ -203,25 +226,28 @@ static void transport_handler(struct rp_trans_endpoint *endpoint,
 {
 	struct rp_ser *rp = RP_CONTAINER_OF(endpoint, struct rp_ser, endpoint);
 
-	rp_ser_received_data_parse(rp, buf, length);
+	received_data_parse(rp, buf, length);
 }
 
-uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
-	const uint8_t *buf, size_t length)
-{
-	return 0;
-}
-
-rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_encoder *encoder,
-			 cmd_rsp_handler_t rsp)
+rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
+			 CborEncoder *encoder, cmd_handler_t rsp)
 {
 	rp_err_t err;
 
-	if (!rp || !encoder) {
+	if (!rp || !rp_buf) {
 		return RP_ERROR_NULL;
 	}
 
-	if (encoder->packet_size < 1) {
+	/* Encode NULL value to indicate packet end. */
+	if (cbor_encode_null(encoder) != CborNoError) {
+		return RP_ERROR_INTERNAL;
+	}
+
+	/* Calculate TinyCbor packet size */
+	rp_buf->packet_size += cbor_encoder_get_buffer_size(encoder,
+							    buf_tail_get(rp_buf));
+
+	if (rp_buf->packet_size < 1) {
 		return RP_ERROR_INVALID_PARAM;
 	}
 
@@ -229,7 +255,7 @@ rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_encoder *encoder,
 		return RP_ERROR_BUSY;
 	}
 
-	err = rp_trans_send(&rp->endpoint, encoder->buf, encoder->packet_size);
+	err = rp_trans_send(&rp->endpoint, rp_buf->buf, rp_buf->packet_size);
 	if (err) {
 		return err;
 	}
@@ -247,22 +273,32 @@ rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_encoder *encoder,
 	return RP_SUCCESS;
 }
 
-rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_encoder *encoder)
+rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
+			 CborEncoder *encoder)
 {
-	if (!rp || !encoder) {
+	if (!rp || !rp_buf) {
 		return RP_ERROR_NULL;
 	}
 
-	if (encoder->packet_size < 1) {
+	/* Encode NULL value to indicate packet end. */
+	if (cbor_encode_null(encoder) != CborNoError) {
+		return RP_ERROR_INTERNAL;
+	}
+
+	/* Calculate TinyCbor packet size */
+	rp_buf->packet_size += cbor_encoder_get_buffer_size(encoder,
+							    buf_tail_get(rp_buf));
+	if (rp_buf->packet_size < 1) {
 		return RP_ERROR_INVALID_PARAM;
 	}
 
-	return rp_trans_send(&rp->endpoint, encoder->buf, encoder->packet_size);
+	return rp_trans_send(&rp->endpoint, rp_buf->buf, rp_buf->packet_size);
 }
 
-rp_err_t rp_ser_rsp_send(struct rp_ser *rp, struct rp_ser_encoder *encoder)
+rp_err_t rp_ser_rsp_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
+			 CborEncoder *encoder)
 {
-	return rp_ser_evt_send(rp, encoder);
+	return rp_ser_evt_send(rp, rp_buf, encoder);
 }
 
 rp_err_t rp_ser_init(struct rp_ser *rp)
@@ -278,10 +314,10 @@ rp_err_t rp_ser_init(struct rp_ser *rp)
 		return err;
 	}
 
-	RP_LOG_DBG("Os signal initialized");
+	RP_LOG_DBG("OS signal initialized");
 
 	if (!endpoint_cnt) {
-		err = rp_trans_init(transport_handler, transport_filter);
+		err = rp_trans_init(transport_handler);
 		if (err) {
 			return err;
 		}
@@ -292,67 +328,75 @@ rp_err_t rp_ser_init(struct rp_ser *rp)
 	return rp_trans_endpoint_init(&rp->endpoint, rp->ep_conf->number);
 }
 
-rp_err_t rp_ser_procedure_initialize(struct rp_ser_encoder *encoder,
-				     CborEncoder *container,
-				     size_t argc, enum rp_ser_packet_type type,
-				     uint8_t value)
+rp_err_t rp_ser_cmd_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder,
+			 uint8_t cmd)
 {
-	CborError err;
-	size_t container_size;
+	uint8_t *data = rp_buf->buf;
 
-	if (!encoder || !container) {
+	if (!rp_buf) {
 		return RP_ERROR_NULL;
 	}
 
-	encoder->container = container;
-
-	cbor_encoder_init(&encoder->encoder, encoder->buf,
-			  encoder->buf_size, 0);
-
-	container_size = argc + (type == RP_SER_PACKET_TYPE_RSP ?
-				 RP_SER_RSP_INITIAL_ARRAY_SIZE : RP_SER_CMD_EVT_INITIAL_ARRAY_SIZE);
-
-	err = cbor_encoder_create_array(&encoder->encoder, encoder->container,
-					container_size);
-	if (err) {
-		return RP_ERROR_INTERNAL;
+	if (rp_buf->size < RP_SER_CMD_EVT_INITIAL_ARRAY_SIZE) {
+		return RP_ERROR_NO_MEM;
 	}
 
-	err = cbor_encode_simple_value(encoder->container, type);
-	if (err) {
-		return RP_ERROR_INTERNAL;
-	}
+	*data = RP_SER_PACKET_TYPE_CMD;
+	rp_buf->packet_size++;
+	data++;
 
-	if (type == RP_SER_PACKET_TYPE_RSP) {
-		return RP_SUCCESS;
-	}
+	*data = cmd;
+	rp_buf->packet_size++;
 
-	err = cbor_encode_simple_value(encoder->container, value);
-	if (err) {
-		return RP_ERROR_INTERNAL;
-	}
+	cbor_encoder_init(encoder, buf_tail_get(rp_buf),
+			  buf_free_space_get(rp_buf), 0);
 
 	return RP_SUCCESS;
 }
 
-rp_err_t rp_ser_procedure_end(struct rp_ser_encoder *encoder)
+rp_err_t rp_ser_evt_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder,
+			 uint8_t evt)
 {
-	CborError err;
+	uint8_t *data = rp_buf->buf;
 
-	if (!encoder) {
+	if (!rp_buf) {
 		return RP_ERROR_NULL;
 	}
 
-	err = cbor_encoder_close_container(&encoder->encoder, encoder->container);
-	if (err) {
-		return RP_ERROR_INTERNAL;
+	if (rp_buf->size < RP_SER_CMD_EVT_INITIAL_ARRAY_SIZE) {
+		return RP_ERROR_NO_MEM;
 	}
 
-	encoder->packet_size = cbor_encoder_get_buffer_size(&encoder->encoder, encoder->buf);
+	*data = RP_SER_PACKET_TYPE_EVENT;
+	rp_buf->packet_size++;
+	data++;
 
-	if (encoder->packet_size < 1) {
-		return RP_ERROR_INVALID_PARAM;
+	*data = evt;
+	rp_buf->packet_size++;
+
+	cbor_encoder_init(encoder, buf_tail_get(rp_buf),
+			  buf_free_space_get(rp_buf), 0);
+
+	return RP_SUCCESS;
+}
+
+rp_err_t rp_ser_rsp_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder)
+{
+	uint8_t *data = rp_buf->buf;
+
+	if (!rp_buf) {
+		return RP_ERROR_NULL;
 	}
+
+	if (rp_buf->size < RP_SER_RSP_INITIAL_ARRAY_SIZE) {
+		return RP_ERROR_NO_MEM;
+	}
+
+	*data = RP_SER_PACKET_TYPE_RSP;
+	rp_buf->packet_size++;
+
+	cbor_encoder_init(encoder, buf_tail_get(rp_buf),
+			  buf_free_space_get(rp_buf), 0);
 
 	return RP_SUCCESS;
 }

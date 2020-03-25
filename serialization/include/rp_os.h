@@ -12,9 +12,9 @@
 
 /**
  * @file
- * @defgroup rp_os Remote procedures serialization OS API
+ * @defgroup rp_os Remote Procedures Serialization OS abstraction API
  * @{
- * @brief Remote procedures OS specific API
+ * @brief Remote Procedures OS-specific API
  */
 
 #ifdef __cplusplus
@@ -34,17 +34,17 @@ extern "C" {
  * @param[in] rp Remote Procedure serialization instance.
  *
  * @retval 0 If the operation was successful.
- *           Otherwise, a (negative) error code is returned.
+ *           Otherwise, a error code is returned.
  */
 rp_err_t rp_os_signal_init(struct rp_ser *rp);
 
-/**@brief Function to be called after request remote procedure call. It
+/**@brief Function to be called after requesting a remote procedure call. It
  *        should implement a 'Wait for signal' functionality in the OS.
  *
  * @param[in] rp Remote Procedure serialization instance.
  *
  * @retval 0 If the operation was successful.
- *           Otherwise, a (negative) error code is returned.
+ *           Otherwise, a error code is returned.
  */
 rp_err_t rp_os_response_wait(struct rp_ser *rp);
 
@@ -54,7 +54,7 @@ rp_err_t rp_os_response_wait(struct rp_ser *rp);
  * @param[in] rp Remote Procedure serialization instance.
  *
  * @retval 0 If the operation was successful.
- *           Otherwise, a (negative) error code is returned.
+ *           Otherwise, a error code is returned.
  */
 rp_err_t rp_os_response_signal(struct rp_ser *rp);
 

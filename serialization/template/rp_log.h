@@ -102,4 +102,4 @@ extern "C" {
 }
 #endif
 
-#endif /* RP_SER_LOG_H_ */
+#endif /* RP_LOG_H_ */

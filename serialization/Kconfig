@@ -4,18 +4,18 @@
 # SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
 #
 
-config RP_SERIALIZATION
-	bool "Enable serialization library"
+menuconfig RP_SERIALIZATION
+	bool "Serialization library"
 	help
-	  Enable serialization library, with chosen transport layer
+	  Enable serialization library, with a chosen transport layer
 
 if RP_SERIALIZATION
 
 choice
-	prompt "Serialization transport"
-	default RMPSG_TRANSPORT
+	prompt "Serialization transport layer"
+	default RPMSG_TRANSPORT
 
-config RMPSG_TRANSPORT
+config RPMSG_TRANSPORT
 	bool "Serialization RPMsg transport"
 
 endchoice
