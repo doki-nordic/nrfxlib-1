@@ -228,6 +228,12 @@ static void transport_handler(struct rp_trans_endpoint *endpoint,
 
 	received_data_parse(rp, buf, length);
 }
+ 
+uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
+	const uint8_t *buf, size_t length)
+{
+	return 0;
+}
 
 rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
 			 CborEncoder *encoder, cmd_handler_t rsp)
@@ -317,7 +323,7 @@ rp_err_t rp_ser_init(struct rp_ser *rp)
 	RP_LOG_DBG("OS signal initialized");
 
 	if (!endpoint_cnt) {
-		err = rp_trans_init(transport_handler);
+		err = rp_trans_init(transport_handler, transport_filter);
 		if (err) {
 			return err;
 		}
