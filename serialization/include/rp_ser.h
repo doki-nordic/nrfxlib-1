@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 /**@brief Serialization packet type.*/
-enum rp_ser_packet_type {
+enum rp_ser_packet_type { // NEXT: Is it needed in header (we have different API for each type of packet)
 	/** Serialization command packet. */
 	RP_SER_PACKET_TYPE_CMD          = 0x01,
 
@@ -36,6 +36,9 @@ enum rp_ser_packet_type {
 
 	/** Serialization command response packet. */
 	RP_SER_PACKET_TYPE_RSP,
+
+	/** Serialization event acknowledge packet. */
+	RP_SER_PACKET_TYPE_ACK,
 
 	/** Serialization transport reserved packet. */
 	RP_SER_PACKET_TRANSPORT_RESERVED = 128,
@@ -154,13 +157,16 @@ struct rp_ser {
 	const struct rp_ser_decoders *decoders;
 
 	/** Transport endpoint initial configuration. */
-	const struct rp_ser_endpoint *ep_conf;
+	const struct rp_ser_endpoint *ep_conf; // NEXT: delete structure and place number here. move to union to save space
 
 	/** Pointer to OS signal mechanism. */
-	void *rp_sem;
+	void *rp_sem; // DKTODO: remove
 
 	/** Current processing command response decoder. */
 	cmd_handler_t rsp_handler;
+
+	// DKTODO: Comment
+	bool waiting_for_ack;
 };
 
 /**@brief Macro for defining the Remote Procedure Serialization instance.

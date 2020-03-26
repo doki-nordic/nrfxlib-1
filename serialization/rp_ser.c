@@ -5,11 +5,23 @@
  */
 #include <rp_ser.h>
 #include <rp_trans.h>
-#include <rp_os.h>
 #include <rp_errors.h>
 
 #define RP_LOG_MODULE SER_CORE
 #include <rp_log.h>
+
+
+#if defined(CONFIG_RP_SER_FORCE_EVENT_ACK) || RP_TRANS_REQUIRE_EVENT_ACK
+#define USE_EVENT_ACK 1
+#else
+#define USE_EVENT_ACK 0
+#endif
+
+
+#define FILTERED_RESPONSE 1
+#if USE_EVENT_ACK
+#define FILTERED_ACK 2
+#endif
 
 #define RP_SER_RSP_INITIAL_ARRAY_SIZE 2
 #define RP_SER_CMD_EVT_INITIAL_ARRAY_SIZE 3
@@ -58,7 +70,7 @@ static rp_err_t cmd_execute(struct rp_ser *rp, uint8_t cmd, CborValue *it)
 	return err;
 }
 
-static rp_err_t event_parse(struct rp_ser *rp, uint8_t evt, CborValue *it)
+static rp_err_t event_parse(struct rp_ser *rp, uint8_t evt, CborValue *it) // DKTODO: Why cmd is splited and event not?
 {
 	rp_err_t err;
 	evt_handler_t evt_handler = NULL;
@@ -84,7 +96,7 @@ static rp_err_t event_parse(struct rp_ser *rp, uint8_t evt, CborValue *it)
 static rp_err_t response_parse(struct rp_ser *rp, const uint8_t *data,
 			       size_t len)
 {
-	rp_err_t err;
+	rp_err_t err = RP_SUCCESS;
 	CborParser parser;
 	CborValue value;
 
@@ -100,15 +112,9 @@ static rp_err_t response_parse(struct rp_ser *rp, const uint8_t *data,
 
 	if (rp->rsp_handler) {
 		err = rp->rsp_handler(&value);
-
-		rp->rsp_handler = NULL;
-
-		if (err) {
-			return err;
-		}
 	}
 
-	return rp_os_response_signal(rp);
+	return err;
 }
 
 static rp_err_t event_dispatch(struct rp_ser *rp, const uint8_t *data,
@@ -181,7 +187,20 @@ static rp_err_t received_data_parse(struct rp_ser *rp,
 	rp_err_t err;
 	uint8_t packet_type;
 	uint32_t index = 0;
+#if USE_EVENT_ACK
+	bool prev_wait_for_ack;
+#endif /* USE_EVENT_ACK */
 
+	if (data == NULL) {
+#if USE_EVENT_ACK
+		__ASSERT(length == FILTERED_ACK, "Invalid response");
+		rp->waiting_for_ack = false;
+#else
+		__ASSERT(0, "Invalid response"); // DKTODO: Check if __ASSERT is available outside zephyr
+#endif
+		return RP_SUCCESS;
+	}
+ 
 	if (len  < 1) {
 		return RP_ERROR_INVALID_PARAM;
 	}
@@ -190,23 +209,32 @@ static rp_err_t received_data_parse(struct rp_ser *rp,
 	index++;
 	len -= index;
 
+	// We get response - this kind of packet should be handled before
+	__ASSERT(type != RP_SER_PACKET_TYPE_RSP, "Response packet without any call");
+
 	switch (packet_type) {
 	case RP_SER_PACKET_TYPE_CMD:
+#if USE_EVENT_ACK
+		// If we are executing command then the other end is waiting for
+		// response, so sending notifications and commands is available again now.
+		prev_wait_for_ack = rp->waiting_for_ack;
+		rp->waiting_for_ack = false;
+#endif
 		RP_LOG_DBG("Command received");
 		err = cmd_dispatch(rp, &data[index], len);
-
+#if USE_EVENT_ACK
+		// Resore previous state of waiting for ack
+		rp->waiting_for_ack = prev_wait_for_ack;
+#endif
 		break;
 
 	case RP_SER_PACKET_TYPE_EVENT:
 		RP_LOG_DBG("Event received");
 		err = event_dispatch(rp, &data[index], len);
-
-		break;
-
-	case RP_SER_PACKET_TYPE_RSP:
-		RP_LOG_DBG("Response received");
-		err = response_parse(rp, &data[index], len);
-
+#if USE_EVENT_ACK
+		packet_type = RP_SER_PACKET_TYPE_ACK;
+		rp_trans_send(&rp->endpoint, &packet_type, 1);
+#endif /* USE_EVENT_ACK */
 		break;
 
 	default:
@@ -214,11 +242,7 @@ static rp_err_t received_data_parse(struct rp_ser *rp,
 		return RP_ERROR_NOT_SUPPORTED;
 	}
 
-	if (err) {
-		return err;
-	}
-
-	return RP_SUCCESS;
+	return err;
 }
 
 static void transport_handler(struct rp_trans_endpoint *endpoint,
@@ -228,15 +252,158 @@ static void transport_handler(struct rp_trans_endpoint *endpoint,
 
 	received_data_parse(rp, buf, length);
 }
- 
+
 uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
-	const uint8_t *buf, size_t length)
+			  const uint8_t *buf, size_t length)
 {
+	struct rp_ser *rp = RP_CONTAINER_OF(endpoint, struct rp_ser, endpoint);
+
+	switch (buf[0])
+	{
+	case RP_SER_PACKET_TYPE_RSP:
+		if (rp->rsp_handler) {
+			response_parse(rp, buf, length); // NEXT: Unify len and length
+			rp->rsp_handler = NULL;
+			return FILTERED_RESPONSE;
+		}
+		break;
+
+#if USE_EVENT_ACK
+	case RP_SER_PACKET_TYPE_ACK:
+		return FILTERED_ACK;
+#endif
+	
+	default:
+		break;
+	}
 	return 0;
 }
 
-rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
-			 CborEncoder *encoder, cmd_handler_t rsp)
+// Call after send of command to wait for response
+int wait_for_response(struct rp_ser *rp) // NEXT: Add buffer output parameter for inline decoder
+{
+	const uint8_t *packet;
+	int packet_length;
+
+	do {
+		// Wait for something from rx callback
+		packet_length = rp_trans_read(&rp->endpoint, &packet);
+
+		if (packet == NULL)
+		{
+			__ASSERT(packet_length == FILTERED_RESPONSE, "Invalid response");
+			return 0;
+		}
+
+		switch (packet[0])
+		{
+		/* NEXT: Allow inline decoder
+		case RP_SER_PACKET_TYPE_RSP:
+			if (out_packet) {
+				*out_packet = packet;
+			}
+			return packet_length;*/
+		case RP_SER_PACKET_TYPE_CMD:
+		case RP_SER_PACKET_TYPE_EVENT:
+			// rp_trans_read_end will be called indirectly from command/event decoder
+			received_data_parse(rp, packet, packet_length);
+			break;
+		default:
+			__ASSERT(0, "Invalid response");
+			break;
+		}
+	} while (true);
+}
+
+#if USE_EVENT_ACK
+
+// Called before sending command or notify to make sure that last notification was finished and the other end
+// can handle this packet imidetally.
+void wait_for_last_ack(struct rp_ser *rp)
+{
+	const uint8_t *packet;
+	int packet_length;
+
+	if (!rp->waiting_for_ack) {
+		return;
+	}
+
+	do {
+		// Wait for something from rx callback
+		packet_length = rp_trans_read(&rp->endpoint, &packet);
+
+		if (packet == NULL)
+		{
+			__ASSERT(packet_length == FILTERED_ACK, "Invalid response");
+			rp->waiting_for_ack = false;
+			return;
+		}
+
+		switch (packet[0])
+		{
+		case RP_SER_PACKET_TYPE_CMD:
+		case RP_SER_PACKET_TYPE_EVENT:
+			// rp_trans_read_end will be called indirectly from command/event decoder
+			received_data_parse(rp, packet, packet_length);
+			break;
+		default:
+			__ASSERT(0, "Invalid response");
+			break;
+		}
+	} while (true);
+}
+
+#endif /* USE_EVENT_ACK */
+
+rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf, // NEXT: Replace rp_buf and encoder by buffer and length
+			 CborEncoder *encoder, cmd_handler_t rsp) // NEXT: add result pointer
+{
+	cmd_handler_t old_rsp;
+	rp_err_t err;
+
+	if (!rp || !rp_buf) {
+		return RP_ERROR_NULL;
+	}
+
+	/* Encode NULL value to indicate packet end. */
+	if (cbor_encode_null(encoder) != CborNoError) { // NEXT: Move to cbor layer
+		return RP_ERROR_INTERNAL;
+	}
+
+	/* Calculate TinyCbor packet size */
+	rp_buf->packet_size += cbor_encoder_get_buffer_size(encoder,
+							    buf_tail_get(rp_buf)); // NEXT: Move to cbor layer
+
+	if (rp_buf->packet_size < 1) {
+		return RP_ERROR_INVALID_PARAM; // NEXT: Not needed
+	}
+
+	// Endpoint is not accessible by other thread from this point
+	rp_trans_own(&rp->endpoint);
+	// Make sure that someone can handle packet immidietallty
+#if USE_EVENT_ACK
+        wait_for_last_ack(rp);
+#endif /* USE_EVENT_ACK */
+	// Set decoder for current command and save on stack decoder for previously waiting response
+	old_rsp = rp->rsp_handler; // NEXT: add pointer to result
+	rp->rsp_handler = rsp;
+	// Send buffer to transport layer
+	err = rp_trans_send(&rp->endpoint, rp_buf->buf, rp_buf->packet_size);
+	if (err) {
+		goto error;
+	}
+	// Wait for response. During waiting nested commands and notifications are possible
+	err = wait_for_response(rp);
+
+error:
+	// restore decoder for previously waiting response
+	rp->rsp_handler = old_rsp;
+	rp_trans_give(&rp->endpoint);
+	return err;
+}
+
+rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
+			 CborEncoder *encoder)
 {
 	rp_err_t err;
 
@@ -252,36 +419,30 @@ rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
 	/* Calculate TinyCbor packet size */
 	rp_buf->packet_size += cbor_encoder_get_buffer_size(encoder,
 							    buf_tail_get(rp_buf));
-
 	if (rp_buf->packet_size < 1) {
 		return RP_ERROR_INVALID_PARAM;
 	}
 
-	if (rp->rsp_handler) {
-		return RP_ERROR_BUSY;
-	}
-
+        // Endpoint is not accessible by other thread from this point
+	rp_trans_own(&rp->endpoint);
+#if USE_EVENT_ACK
+        // Make sure that someone can handle packet immidietallty
+        wait_for_last_ack(rp);
+        // we are expecting ack later
+        rp->waiting_for_ack = true;
+#endif /* USE_EVENT_ACK */
+        // Send buffer to transport layer
 	err = rp_trans_send(&rp->endpoint, rp_buf->buf, rp_buf->packet_size);
-	if (err) {
-		return err;
-	}
-
-	RP_LOG_DBG("Command sent");
-
-	if (rsp) {
-		rp->rsp_handler = rsp;
-
-		RP_LOG_DBG("Waiting for response");
-
-		return rp_os_response_wait(rp);
-	}
-
-	return RP_SUCCESS;
+        // We can unlock now, nothing more to do
+	rp_trans_give(&rp->endpoint);
+	return err;
 }
 
-rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
+rp_err_t rp_ser_rsp_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
 			 CborEncoder *encoder)
 {
+	rp_err_t err;
+
 	if (!rp || !rp_buf) {
 		return RP_ERROR_NULL;
 	}
@@ -298,13 +459,9 @@ rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
 		return RP_ERROR_INVALID_PARAM;
 	}
 
-	return rp_trans_send(&rp->endpoint, rp_buf->buf, rp_buf->packet_size);
-}
-
-rp_err_t rp_ser_rsp_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
-			 CborEncoder *encoder)
-{
-	return rp_ser_evt_send(rp, rp_buf, encoder);
+        // Send buffer to transport layer
+	err = rp_trans_send(&rp->endpoint, rp_buf->buf, rp_buf->packet_size);
+	return err;
 }
 
 rp_err_t rp_ser_init(struct rp_ser *rp)
@@ -314,13 +471,6 @@ rp_err_t rp_ser_init(struct rp_ser *rp)
 	if (!rp) {
 		return RP_ERROR_NULL;
 	}
-
-	err = rp_os_signal_init(rp);
-	if (err) {
-		return err;
-	}
-
-	RP_LOG_DBG("OS signal initialized");
 
 	if (!endpoint_cnt) {
 		err = rp_trans_init(transport_handler, transport_filter);
