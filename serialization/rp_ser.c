@@ -253,7 +253,7 @@ static void transport_handler(struct rp_trans_endpoint *endpoint,
 	received_data_parse(rp, buf, length);
 }
 
-uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
+static uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
 			  const uint8_t *buf, size_t length)
 {
 	struct rp_ser *rp = RP_CONTAINER_OF(endpoint, struct rp_ser, endpoint);
@@ -262,7 +262,7 @@ uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
 	{
 	case RP_SER_PACKET_TYPE_RSP:
 		if (rp->rsp_handler) {
-			response_parse(rp, buf, length); // NEXT: Unify len and length
+			response_parse(rp, &buf[1], length - 1); // NEXT: Unify len and length
 			rp->rsp_handler = NULL;
 			return FILTERED_RESPONSE;
 		}
@@ -280,7 +280,7 @@ uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
 }
 
 // Call after send of command to wait for response
-int wait_for_response(struct rp_ser *rp) // NEXT: Add buffer output parameter for inline decoder
+static int wait_for_response(struct rp_ser *rp) // NEXT: Add buffer output parameter for inline decoder
 {
 	const uint8_t *packet;
 	int packet_length;
@@ -319,7 +319,7 @@ int wait_for_response(struct rp_ser *rp) // NEXT: Add buffer output parameter fo
 
 // Called before sending command or notify to make sure that last notification was finished and the other end
 // can handle this packet imidetally.
-void wait_for_last_ack(struct rp_ser *rp)
+static void wait_for_last_ack(struct rp_ser *rp)
 {
 	const uint8_t *packet;
 	int packet_length;
@@ -462,6 +462,11 @@ rp_err_t rp_ser_rsp_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
         // Send buffer to transport layer
 	err = rp_trans_send(&rp->endpoint, rp_buf->buf, rp_buf->packet_size);
 	return err;
+}
+
+void rp_ser_decode_done(struct rp_ser *rp)
+{
+	rp_trans_release_buffer(&rp->endpoint);
 }
 
 rp_err_t rp_ser_init(struct rp_ser *rp)
