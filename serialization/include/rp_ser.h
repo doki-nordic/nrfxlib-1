@@ -359,6 +359,8 @@ rp_err_t rp_ser_evt_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder,
  */
 rp_err_t rp_ser_rsp_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder);
 
+void rp_ser_decode_done(struct rp_ser *rp);
+
 /**@brief Define the rp_ser_buf stack variable and allocate Remote Procedure
  *        buffer. Every remote procedure needs to alloc the buffer for
  *        encoded data.
