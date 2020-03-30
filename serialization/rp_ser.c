@@ -19,9 +19,7 @@
 
 
 #define FILTERED_RESPONSE 1
-#if USE_EVENT_ACK
 #define FILTERED_ACK 2
-#endif
 
 #define RP_SER_RSP_INITIAL_ARRAY_SIZE 2
 #define RP_SER_CMD_EVT_INITIAL_ARRAY_SIZE 3
@@ -187,17 +185,15 @@ static rp_err_t received_data_parse(struct rp_ser *rp,
 	rp_err_t err;
 	uint8_t packet_type;
 	uint32_t index = 0;
-#if USE_EVENT_ACK
 	bool prev_wait_for_ack;
-#endif /* USE_EVENT_ACK */
 
 	if (data == NULL) {
-#if USE_EVENT_ACK
-		__ASSERT(length == FILTERED_ACK, "Invalid response");
-		rp->waiting_for_ack = false;
-#else
-		__ASSERT(0, "Invalid response"); // DKTODO: Check if __ASSERT is available outside zephyr
-#endif
+		if (USE_EVENT_ACK) {
+			__ASSERT(length == FILTERED_ACK, "Invalid response");
+			rp->waiting_for_ack = false;
+		} else {
+			__ASSERT(0, "Invalid response"); // DKTODO: Check if __ASSERT is available outside zephyr
+		}
 		return RP_SUCCESS;
 	}
  
@@ -214,27 +210,27 @@ static rp_err_t received_data_parse(struct rp_ser *rp,
 
 	switch (packet_type) {
 	case RP_SER_PACKET_TYPE_CMD:
-#if USE_EVENT_ACK
-		// If we are executing command then the other end is waiting for
-		// response, so sending notifications and commands is available again now.
-		prev_wait_for_ack = rp->waiting_for_ack;
-		rp->waiting_for_ack = false;
-#endif
+		if (USE_EVENT_ACK) {
+			// If we are executing command then the other end is waiting for
+			// response, so sending notifications and commands is available again now.
+			prev_wait_for_ack = rp->waiting_for_ack;
+			rp->waiting_for_ack = false;
+		}
 		RP_LOG_DBG("Command received");
 		err = cmd_dispatch(rp, &data[index], len);
-#if USE_EVENT_ACK
-		// Resore previous state of waiting for ack
-		rp->waiting_for_ack = prev_wait_for_ack;
-#endif
+		if (USE_EVENT_ACK) {
+			// Resore previous state of waiting for ack
+			rp->waiting_for_ack = prev_wait_for_ack;
+		}
 		break;
 
 	case RP_SER_PACKET_TYPE_EVENT:
 		RP_LOG_DBG("Event received");
 		err = event_dispatch(rp, &data[index], len);
-#if USE_EVENT_ACK
-		packet_type = RP_SER_PACKET_TYPE_ACK;
-		rp_trans_send(&rp->endpoint, &packet_type, 1);
-#endif /* USE_EVENT_ACK */
+		if (USE_EVENT_ACK) {
+			packet_type = RP_SER_PACKET_TYPE_ACK;
+			rp_trans_send(&rp->endpoint, &packet_type, 1);
+		}
 		break;
 
 	default:
@@ -268,10 +264,11 @@ static uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
 		}
 		break;
 
-#if USE_EVENT_ACK
 	case RP_SER_PACKET_TYPE_ACK:
-		return FILTERED_ACK;
-#endif
+		if (USE_EVENT_ACK) {
+			return FILTERED_ACK;
+		}
+		break;
 	
 	default:
 		break;
@@ -315,8 +312,6 @@ static int wait_for_response(struct rp_ser *rp) // NEXT: Add buffer output param
 	} while (true);
 }
 
-#if USE_EVENT_ACK
-
 // Called before sending command or notify to make sure that last notification was finished and the other end
 // can handle this packet imidetally.
 static void wait_for_last_ack(struct rp_ser *rp)
@@ -353,8 +348,6 @@ static void wait_for_last_ack(struct rp_ser *rp)
 	} while (true);
 }
 
-#endif /* USE_EVENT_ACK */
-
 rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf, // NEXT: Replace rp_buf and encoder by buffer and length
 			 CborEncoder *encoder, cmd_handler_t rsp) // NEXT: add result pointer
 {
@@ -381,9 +374,9 @@ rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf, // NEXT: 
 	// Endpoint is not accessible by other thread from this point
 	rp_trans_own(&rp->endpoint);
 	// Make sure that someone can handle packet immidietallty
-#if USE_EVENT_ACK
-        wait_for_last_ack(rp);
-#endif /* USE_EVENT_ACK */
+	if (USE_EVENT_ACK) {
+		wait_for_last_ack(rp);
+	}
 	// Set decoder for current command and save on stack decoder for previously waiting response
 	old_rsp = rp->rsp_handler; // NEXT: add pointer to result
 	rp->rsp_handler = rsp;
@@ -423,14 +416,14 @@ rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
 		return RP_ERROR_INVALID_PARAM;
 	}
 
-        // Endpoint is not accessible by other thread from this point
+	// Endpoint is not accessible by other thread from this point
 	rp_trans_own(&rp->endpoint);
-#if USE_EVENT_ACK
-        // Make sure that someone can handle packet immidietallty
-        wait_for_last_ack(rp);
-        // we are expecting ack later
-        rp->waiting_for_ack = true;
-#endif /* USE_EVENT_ACK */
+	if (USE_EVENT_ACK) {
+		// Make sure that someone can handle packet immidietallty
+		wait_for_last_ack(rp);
+		// we are expecting ack later
+		rp->waiting_for_ack = true;
+	}
         // Send buffer to transport layer
 	err = rp_trans_send(&rp->endpoint, rp_buf->buf, rp_buf->packet_size);
         // We can unlock now, nothing more to do
