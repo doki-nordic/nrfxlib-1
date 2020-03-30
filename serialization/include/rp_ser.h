@@ -83,8 +83,8 @@ struct rp_ser_evt {
 	evt_handler_t func;
 };
 
-/**@brief Commands and events decoder structure. */
-struct rp_ser_decoders {
+/**@brief Configuration for Remote Procedure Serialization instance. */
+struct rp_ser_conf {
 	/** Command section start address. */
 	const struct rp_ser_cmd *cmd_begin;
 
@@ -96,6 +96,9 @@ struct rp_ser_decoders {
 
 	/** Event section end address. */
 	const struct rp_ser_evt *evt_end;
+
+	/** Endpoint number. */
+	int ep_number;
 };
 
 /**@brief Helper macro for creating command decoder. All comands decoders have to be assigned
@@ -109,7 +112,6 @@ struct rp_ser_decoders {
  * @param[in] _handler Command decoder function @ref cmd_handler_t.
  */
 #define RP_SER_CMD_DECODER(_rp_inst, _name, _cmd, _handler)         \
-	RP_STATIC_ASSERT(&_rp_inst != NULL, "Invalid instance");    \
 	RP_STATIC_ASSERT(_cmd <= 0xFF, "Command out of range");     \
 	const struct rp_ser_cmd RP_CONCAT(_name, _cmd_dec) __used   \
 	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder) \
@@ -131,7 +133,6 @@ struct rp_ser_decoders {
  * @param[in] _handler Event decoder function @ref cmd_handler_t.
  */
 #define RP_SER_EVT_DECODER(_rp_inst, _name, _evt, _handler)         \
-	RP_STATIC_ASSERT(&_rp_inst != NULL, "Invalid instance");    \
 	RP_STATIC_ASSERT(_evt <= 0xFF, "Event out of range");       \
 	const struct rp_ser_evt RP_CONCAT(_name, _evt_dec) __used   \
 	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder) \
@@ -142,25 +143,13 @@ struct rp_ser_decoders {
 		.func = _handler			            \
 	}
 
-/**@brief Endpoint configuration structure. */
-struct rp_ser_endpoint {
-	/** Endpoint number. */
-	int number;
-};
-
 /**@brief Remote Procedure Serialization instance. */
 struct rp_ser {
 	/** Transport endpoint instance. */
 	struct rp_trans_endpoint endpoint;
 
-	/** Decoders section addresses. */
-	const struct rp_ser_decoders *decoders;
-
-	/** Transport endpoint initial configuration. */
-	const struct rp_ser_endpoint *ep_conf; // NEXT: delete structure and place number here. move to union to save space
-
-	/** Pointer to OS signal mechanism. */
-	void *rp_sem; // DKTODO: remove
+	/** Configuration of this instance including decoders addresses. */
+	const struct rp_ser_conf *conf;
 
 	/** Current processing command response decoder. */
 	cmd_handler_t rsp_handler;
@@ -172,13 +161,12 @@ struct rp_ser {
 /**@brief Macro for defining the Remote Procedure Serialization instance.
  *
  * @param[in] _name Instance name.
- * @param[in] _lock_type OS lock data type. For example in Zephyr struct k_sem can be used.
  * @param[in] _endpoint_num Endpoint number, used for transport endpoint identification.
  * @param[in] _endpoint_stack_size Endpoint thread stack size.
  * @param[in] _endpoint_thread_prio Endpoint thread priority.
  */
-#define RP_SER_DEFINE(_name, _lock_type, _endpoint_num,                           \
-		      _endpoint_stack_size, _endpoint_thread_prio)                \
+#define RP_SER_DEFINE(_name, _endpoint_num, _endpoint_stack_size,                 \
+                      _endpoint_thread_prio)                                      \
 	/* Helper variables used to specify start and end addresses of specific   \
 	 * subsection instance event and command decoders data. The section must  \
 	 * be sorted in alphabetical order to ensure the valid value.             \
@@ -195,28 +183,22 @@ struct rp_ser {
 		const struct rp_ser_evt RP_CONCAT(_name, _evt_end) __used         \
 	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder)               \
 				   "." "evt" "." RP_STRINGIFY(_name) "." "}")));  \
-                                                                                  \
-	static _lock_type RP_CONCAT(_name, _sem);                                 \
-	static const struct rp_ser_endpoint RP_CONCAT(_name, _ep) = {             \
-		.number = _endpoint_num,                                          \
-	};                                                                        \
 										  \
 	RP_TRANS_ENDPOINT_PREPARE(RP_CONCAT(_name, _ep),                          \
 					    _endpoint_stack_size,                 \
 					    _endpoint_thread_prio);               \
 										  \
-	const struct rp_ser_decoders RP_CONCAT(_name, _decoders) = {		  \
+	static const struct rp_ser_conf RP_CONCAT(_name, _conf) = {		  \
 		.cmd_begin = (&RP_CONCAT(_name, _cmd_begin) + 1),		  \
 		.cmd_end = &RP_CONCAT(_name, _cmd_end),			          \
 		.evt_begin = (&RP_CONCAT(_name, _evt_begin) + 1),		  \
-		.evt_end = &RP_CONCAT(_name, _evt_end)				  \
+		.evt_end = &RP_CONCAT(_name, _evt_end),				  \
+		.ep_number = _endpoint_num,					  \
 	};									  \
 										  \
 	struct rp_ser _name = {							  \
 		.endpoint = RP_TRANS_ENDPOINT_INITIALIZER(RP_CONCAT(_name, _ep)), \
-		.decoders = &RP_CONCAT(_name, _decoders),			  \
-		.ep_conf = &RP_CONCAT(_name, _ep),				  \
-		.rp_sem = (void *)&RP_CONCAT(_name, _sem),			  \
+		.conf = &RP_CONCAT(_name, _conf),				  \
 	}
 
 /**@brief Macro for declaring a serialization instance (not creating it)

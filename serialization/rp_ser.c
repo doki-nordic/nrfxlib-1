@@ -42,8 +42,8 @@ static cmd_handler_t cmd_handler_get(struct rp_ser *rp, uint8_t cmd)
 {
 	cmd_handler_t cmd_handler = NULL;
 
-	for (const struct rp_ser_cmd *iter = rp->decoders->cmd_begin;
-	     iter <  rp->decoders->cmd_end; iter++) {
+	for (const struct rp_ser_cmd *iter = rp->conf->cmd_begin;
+	     iter <  rp->conf->cmd_end; iter++) {
 		if (cmd == iter->cmd) {
 			cmd_handler = iter->func;
 			break;
@@ -75,8 +75,8 @@ static rp_err_t event_parse(struct rp_ser *rp, uint8_t evt, CborValue *it) // DK
 	rp_err_t err;
 	evt_handler_t evt_handler = NULL;
 
-	for (const struct rp_ser_evt *iter = rp->decoders->evt_begin;
-	     iter <  rp->decoders->evt_end; iter++) {
+	for (const struct rp_ser_evt *iter = rp->conf->evt_begin;
+	     iter <  rp->conf->evt_end; iter++) {
 		if (evt == iter->evt) {
 			evt_handler = iter->func;
 			break;
@@ -486,7 +486,7 @@ rp_err_t rp_ser_init(struct rp_ser *rp)
 		endpoint_cnt++;
 	}
 
-	return rp_trans_endpoint_init(&rp->endpoint, rp->ep_conf->number);
+	return rp_trans_endpoint_init(&rp->endpoint, rp->conf->ep_number);
 }
 
 rp_err_t rp_ser_cmd_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder,
