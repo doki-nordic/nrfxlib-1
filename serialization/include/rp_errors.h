@@ -20,7 +20,8 @@ typedef enum {
 	RP_ERROR_INTERNAL       = 5,
 	RP_ERROR_OS_ERROR       = 6,
 	RP_ERROR_INVALID_STATE  = 7,
-	RP_ERROR_BUSY           = 8
+	RP_ERROR_BUSY           = 8,
+	RP_ERROR_REMOTE         = 9,
 } rp_err_t;
 
 #ifdef __cplusplus

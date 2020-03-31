@@ -26,80 +26,53 @@
 extern "C" {
 #endif
 
-/**@brief Serialization packet type.*/
-enum rp_ser_packet_type { // NEXT: Is it needed in header (we have different API for each type of packet)
-	/** Serialization command packet. */
-	RP_SER_PACKET_TYPE_CMD          = 0x01,
+#define RP_SER_CMD_EVT_HADER_SIZE 2
+#define RP_SER_RSP_ACK_HEADER_SIZE 1
 
-	/** Serialization event packet. */
-	RP_SER_PACKET_TYPE_EVENT,
+/**@brief Command and event decoder handler type. */
+typedef rp_err_t (*rp_ser_decoder_handler_t)(uint8_t code, const uint8_t *packet, size_t len);
 
-	/** Serialization command response packet. */
-	RP_SER_PACKET_TYPE_RSP,
+/**@brief Command and event decoder handler type. */
+typedef rp_err_t (*rp_ser_response_handler_t)(const uint8_t *packet, size_t len);
 
-	/** Serialization event acknowledge packet. */
-	RP_SER_PACKET_TYPE_ACK,
+/**@brief Command/event decoder structure. */
+struct rp_ser_decoder {
+	/** Command/event code. */
+	uint8_t code;
 
-	/** Serialization transport reserved packet. */
-	RP_SER_PACKET_TRANSPORT_RESERVED = 128,
-
-	/** Serialization upper bound. */
-	RP_SER_PACKER_TYPE_MAX           = 255
-};
-
-/**@brief Command and response decoder handler type. */
-typedef rp_err_t (*cmd_handler_t)(CborValue *it);
-
-/**@brief Event decoder handler type. */
-typedef rp_err_t (*evt_handler_t)(uint8_t evt, CborValue *it);
-
-/**@brief Encoder buffer structure. */
-struct rp_ser_buf {
-	/** Encoder buffer. */
-	uint8_t *buf;
-
-	/** Encoder buffer size. */
-	size_t size;
-
-	/** Current packet size. */
-	size_t packet_size;
-};
-
-/**@brief Command decoder structure. */
-struct rp_ser_cmd {
-	/** Command code. */
-	uint8_t cmd;
-
-	/** Command decoder. */
-	cmd_handler_t func;
-};
-
-/**@brief Event decoder structure. */
-struct rp_ser_evt {
-	/** Event code. */
-	uint8_t evt;
-
-	/** Event decoder. */
-	evt_handler_t func;
+	/** Command/event decoder. */
+	rp_ser_decoder_handler_t func;
 };
 
 /**@brief Configuration for Remote Procedure Serialization instance. */
 struct rp_ser_conf {
 	/** Command section start address. */
-	const struct rp_ser_cmd *cmd_begin;
+	const struct rp_ser_decoder *cmd_begin;
 
 	/** Command section end address. */
-	const struct rp_ser_cmd *cmd_end;
+	const struct rp_ser_decoder *cmd_end;
 
 	/** Event section start address. */
-	const struct rp_ser_evt *evt_begin;
+	const struct rp_ser_decoder *evt_begin;
 
 	/** Event section end address. */
-	const struct rp_ser_evt *evt_end;
+	const struct rp_ser_decoder *evt_end;
 
 	/** Endpoint number. */
 	int ep_number;
 };
+
+typedef enum {
+	RP_SER_ERROR_ON_SENDING_CMD = 1,
+	RP_SER_ERROR_ON_SENDING_EVT,
+	RP_SER_ERROR_ON_SENDING_RSP,
+	RP_SER_ERROR_ON_RECEIVING_RSP,
+	RP_SER_ERROR_ON_RECEIVE,
+	RP_SER_ERROR_ON_REMOTE = 0x80,
+} rp_ser_error_location_t;
+
+#define RP_SER_CMD_EVT_CODE_MAX 0xFE
+#define RP_SER_CMD_EVT_CODE_UNKNOWN 0xFF
 
 /**@brief Helper macro for creating command decoder. All comands decoders have to be assigned
  *        to proper Remote Procedure Serialization instance. After receiving a command, the
@@ -113,12 +86,12 @@ struct rp_ser_conf {
  */
 #define RP_SER_CMD_DECODER(_rp_inst, _name, _cmd, _handler)         \
 	RP_STATIC_ASSERT(_cmd <= 0xFF, "Command out of range");     \
-	const struct rp_ser_cmd RP_CONCAT(_name, _cmd_dec) __used   \
+	const struct rp_ser_decoder RP_CONCAT(_name, _cmd_dec) __used   \
 	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder) \
 				   "." "cmd"                        \
 				   "." RP_STRINGIFY(_rp_inst)       \
 				   "." RP_STRINGIFY(_name)))) = {   \
-		.cmd = _cmd,					    \
+		.code = _cmd,					    \
 		.func = _handler				    \
 	}
 
@@ -134,12 +107,12 @@ struct rp_ser_conf {
  */
 #define RP_SER_EVT_DECODER(_rp_inst, _name, _evt, _handler)         \
 	RP_STATIC_ASSERT(_evt <= 0xFF, "Event out of range");       \
-	const struct rp_ser_evt RP_CONCAT(_name, _evt_dec) __used   \
+	const struct rp_ser_decoder RP_CONCAT(_name, _evt_dec) __used   \
 	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder) \
 				   "." "evt"                        \
 				   "." RP_STRINGIFY(_rp_inst)       \
 				   "." RP_STRINGIFY(_name)))) = {   \
-		.evt = _evt                                         \
+		.code = _evt,                                         \
 		.func = _handler			            \
 	}
 
@@ -152,9 +125,9 @@ struct rp_ser {
 	const struct rp_ser_conf *conf;
 
 	/** Current processing command response decoder. */
-	cmd_handler_t rsp_handler;
+	rp_ser_response_handler_t rsp_handler;
 
-	// DKTODO: Comment
+	/** Is this instance waiting for the event acknowledge */
 	bool waiting_for_ack;
 };
 
@@ -171,16 +144,16 @@ struct rp_ser {
 	 * subsection instance event and command decoders data. The section must  \
 	 * be sorted in alphabetical order to ensure the valid value.             \
 	 */                                                                       \
-	const struct rp_ser_cmd RP_CONCAT(_name, _cmd_begin) __used               \
+	const struct rp_ser_decoder RP_CONCAT(_name, _cmd_begin) __used               \
 	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder)               \
 				   "." "cmd" "." RP_STRINGIFY(_name) ".")));      \
-		const struct rp_ser_cmd RP_CONCAT(_name, _cmd_end) __used         \
+	const struct rp_ser_decoder RP_CONCAT(_name, _cmd_end) __used         \
 	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder)               \
 				   "." "cmd" "." RP_STRINGIFY(_name) "." "}")));  \
-		const struct rp_ser_evt RP_CONCAT(_name, _evt_begin) __used       \
+	const struct rp_ser_decoder RP_CONCAT(_name, _evt_begin) __used       \
 	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder)               \
 				   "." "evt" "." RP_STRINGIFY(_name) ".")));      \
-		const struct rp_ser_evt RP_CONCAT(_name, _evt_end) __used         \
+	const struct rp_ser_decoder RP_CONCAT(_name, _evt_end) __used         \
 	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder)               \
 				   "." "evt" "." RP_STRINGIFY(_name) "." "}")));  \
 										  \
@@ -244,9 +217,31 @@ rp_err_t rp_ser_init(struct rp_ser *rp);
  * @retval RP_ERROR_INVALID_PARAM A serialization packet length was 0.
  */
 rp_err_t rp_ser_cmd_send(struct rp_ser *rp,
-			 struct rp_ser_buf *rp_buf,
-			 CborEncoder *encoder,
-			 cmd_handler_t rsp);
+			 uint8_t cmd,
+			 uint8_t *packet,
+			 size_t len,
+			 rp_ser_response_handler_t rsp);
+
+void rp_ser_cmd_send_no_err(struct rp_ser *rp,
+			    uint8_t cmd,
+			    uint8_t *packet,
+			    size_t len,
+			    rp_ser_response_handler_t rsp);
+
+int rp_ser_cmd_send_and_rsp_get(struct rp_ser *rp,
+				uint8_t cmd,
+				uint8_t *in_packet,
+				size_t in_len,
+				const uint8_t **out_packet);
+
+int rp_ser_cmd_send_and_rsp_get_no_err(struct rp_ser *rp,
+				       uint8_t cmd,
+				       uint8_t *in_packet,
+				       size_t in_len,
+				       const uint8_t **out_packet);
+
+void rp_ser_rsp_release(struct rp_ser *rp);
+
 
 /**@brief Function for sending event to the Remote processor.
  *
@@ -263,8 +258,15 @@ rp_err_t rp_ser_cmd_send(struct rp_ser *rp,
  * @retval RP_ERROR_NULL A parameter was NULL.
  * @retval RP_ERROR_INVALID_PARAM A serialization packet length was 0.
  */
-rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
-			 CborEncoder *encoder);
+rp_err_t rp_ser_evt_send(struct rp_ser *rp,
+			 uint8_t evt,
+			 uint8_t *packet,
+			 size_t len);
+
+void rp_ser_evt_send_no_err(struct rp_ser *rp,
+				uint8_t evt,
+				uint8_t *packet,
+				size_t len);
 
 /**@brief Function for sending command response to the Remote processor.
  *
@@ -277,71 +279,16 @@ rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
  * @retval RP_ERROR_NULL A parameter was NULL.
  * @retval RP_ERROR_INVALID_PARAM A serialization packet length was 0.
  */
-rp_err_t rp_ser_rsp_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
-			 CborEncoder *encoder);
+rp_err_t rp_ser_rsp_send(struct rp_ser *rp,
+			 uint8_t *packet,
+			 size_t len);
 
-/**@brief Function for initializing the Remote procedure command packet.
- *
- * This function initializes the command packet. Should be used
- * after allocation of the buffer for encoding the Remote procedure.
- * It creates the packet header data in provided buffer and initializes
- * serializator.
- *
- * @note Command packet needs three bytes from rp_buf for its
- *       internal data.
- *
- * @param[in, out] rp_buf Remote Procedure buffer
- * @param[in, out] encoder Remote Procedure TinyCBOR encoder data.
- * @param[in] cmd Command number.
- *
- * @retval RP_SUCCESS The Remote Procedure initialization was successful.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * @retval RP_ERROR_NO_MEMORY Too small buffer. Packet header data cannot be encoded.
- */
-rp_err_t rp_ser_cmd_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder,
-			 uint8_t cmd);
+void rp_ser_rsp_send_no_err(struct rp_ser *rp,
+				uint8_t *packet,
+				size_t len);
 
-/**@brief Function for initializing the Remote procedure event packet.
- *
- * This function initializes the event packet. Should be used
- * after allocation of the buffer for encoding the Remote procedure.
- * It creates the packet header data in provided buffer and initializes
- * serializator.
- *
- * @note Event packet needs three bytes from rp_buf for its
- *       internal data.
- *
- * @param[in, out] rp_buf Remote Procedure buffer
- * @param[in, out] encoder Remote Procedure TinyCBOR encoder data.
- * @param[in] evt Event number.
- *
- * @retval RP_SUCCESS The Remote Procedure initialization was successful.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * @retval RP_ERROR_NO_MEMORY Too small buffer. Packet header data cannot be encoded.
- */
-rp_err_t rp_ser_evt_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder,
-			 uint8_t evt);
 
-/**@brief Function for initializing the Remote procedure response packet.
- *
- * This function initializes the response packet. Should be used
- * after allocation of the buffer for encoding the Remote procedure.
- * It creates the packet header data in provided buffer and initializes
- * serializator.
- *
- * @note Response packet needs two bytes from rp_buf for its
- *       internal data.
- *
- * @param[in, out] rp_buf Remote Procedure buffer
- * @param[in, out] encoder Remote Procedure TinyCBOR encoder data.
- *
- * @retval RP_SUCCESS The Remote Procedure initialization was successful.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * @retval RP_ERROR_NO_MEMORY Too small buffer. Packet header data cannot be encoded.
- */
-rp_err_t rp_ser_rsp_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder);
-
-void rp_ser_decode_done(struct rp_ser *rp);
+void rp_ser_handler_decoding_done(struct rp_ser *rp);
 
 /**@brief Define the rp_ser_buf stack variable and allocate Remote Procedure
  *        buffer. Every remote procedure needs to alloc the buffer for
@@ -352,14 +299,21 @@ void rp_ser_decode_done(struct rp_ser *rp);
  * @param[in, out] size Requested buffer size as input, allocated buffer size as output.
  *
  */
-#define rp_ser_buf_alloc(_rp_buf_name, _rp, _size)			              \
+#define RP_SER_CMD_ALLOC(_rp_buf_name, _rp, _size)			              \
 	uint8_t *RP_CONCAT(_rp_buf_name, _buf);                                       \
-	rp_trans_alloc_tx_buf(&_rp.endpoint, &RP_CONCAT(_rp_buf_name, _buf), &_size); \
-	struct rp_ser_buf _rp_buf_name = {                                            \
-		.buf = RP_CONCAT(_rp_buf_name, _buf),                                 \
-		.size = _size,                                                        \
-		.packet_size = 0                                                      \
-	}
+	rp_trans_alloc_tx_buf(&(_rp)->endpoint, &RP_CONCAT(_rp_buf_name, _buf), RP_SER_CMD_EVT_HADER_SIZE, _size); \
+	uint8_t *_rp_buf_name = &RP_CONCAT(_rp_buf_name, _buf)[RP_SER_CMD_EVT_HADER_SIZE];                                       \
+
+#define RP_SER_EVT_ALLOC(_rp_buf_name, _rp, _size) RP_SER_CMD_ALLOC(_rp_buf_name, _rp, _size)
+
+#define RP_SER_RSP_ALLOC(_rp_buf_name, _rp, _size)			              \
+	uint8_t *RP_CONCAT(_rp_buf_name, _buf);                                       \
+	rp_trans_alloc_tx_buf(&(_rp)->endpoint, &RP_CONCAT(_rp_buf_name, _buf), RP_SER_RSP_ACK_HEADER_SIZE, _size); \
+	uint8_t *_rp_buf_name = &RP_CONCAT(_rp_buf_name, _buf)[RP_SER_RSP_ACK_HEADER_SIZE];                                       \
+
+#define RP_SER_ALLOC_FAILED(_rp_buf_name) \
+	rp_trans_alloc_failed(RP_CONCAT(_rp_buf_name, _buf))
+
 
 /**@brief Macro for releasing the allocated buffer.
  *        It can be used in case of error in the Remote Procedure Serialization.
@@ -367,8 +321,8 @@ void rp_ser_decode_done(struct rp_ser *rp);
  * @param[in] rp The Remote Procedure Serialization instance.
  * @param[in] buf Pointer to currently used buffer.
  */
-#define rp_ser_buf_free(rp, rp_buf) \
-	rp_trans_free_tx_buf(rp.endpoint, rp_buf.buf)
+#define RP_SER_BUF_DISCARD(_rp_buf_name, _rp) \
+	rp_trans_free_tx_buf(&(_rp)->endpoint, RP_CONCAT(_rp_buf_name, _buf))
 
 #ifdef __cplusplus
 }
