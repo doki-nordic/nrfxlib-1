@@ -21,13 +21,14 @@
 #define USE_EVENT_ACK 0
 #endif
 
-#define RP_SER_ERROR_HADER_SIZE 1
-
 #define FILTERED_RESPONSE 1
 #define FILTERED_ACK 2
 
 #define HEADER_TYPE_INDEX 0
 #define HEADER_CODE_INDEX 1
+
+#define ERROR_FLAG_FATAL 1
+#define ERROR_FLAG_NOTIFY_REMOTE 2
 
 
 enum rp_ser_packet_type {
@@ -35,7 +36,7 @@ enum rp_ser_packet_type {
 	RP_SER_PACKET_TYPE_CMD          = 0x01,
 
 	/** Serialization event packet. */
-	RP_SER_PACKET_TYPE_EVENT,
+	RP_SER_PACKET_TYPE_EVT,
 
 	/** Serialization command response packet. */
 	RP_SER_PACKET_TYPE_RSP,
@@ -44,14 +45,32 @@ enum rp_ser_packet_type {
 	RP_SER_PACKET_TYPE_ACK,
 
 	/** Serialization fatal error notification packet. */
-	RP_SER_PACKET_TYPE_ERROR = 0xFF,
+	RP_SER_PACKET_TYPE_ERR,
 };
+
+struct error_packet
+{
+	struct {
+		uint8_t type;
+	} header;
+	struct {
+		uint8_t code;
+		uint8_t location;
+		uint8_t fatal;
+		int err;
+	} data;	
+};
+
+#define SIZE 20
+#define TYPE struct k_poll_event
+_Static_assert(sizeof(TYPE) <= SIZE, "MORE");
+_Static_assert(sizeof(TYPE) >= SIZE, "LESS");
+_Static_assert(sizeof(TYPE) != SIZE, "OK");
 
 static uint8_t endpoint_cnt;
 
-void rp_ser_error_handler(struct rp_ser *rp, rp_ser_error_location_t location, uint8_t code, bool fatal, rp_err_t err)
+void __attribute__((weak)) rp_ser_error_handler(struct rp_ser *rp, rp_ser_error_location_t location, uint8_t code, rp_err_t err, bool fatal)
 {
-	// TODO: weak
 	RP_LOG_ERR("Unhandled serialization error: %d, cmd/evt: %d, loc: %d", err, code, location);
 	if (fatal) {
 		__ASSERT(0, "Unhandled fatal serialization error");
@@ -59,39 +78,45 @@ void rp_ser_error_handler(struct rp_ser *rp, rp_ser_error_location_t location, u
 	}
 }
 
-static void rp_ser_error(struct rp_ser *rp, rp_ser_error_location_t location, uint8_t code, bool fatal, rp_err_t err)
-{
-	if (fatal) {
-		uint8_t *buf;
-		rp_trans_alloc_tx_buf(&rp->endpoint, &buf, 1, 3 * sizeof(uint8_t)  + sizeof(int));
-		if (!rp_trans_alloc_failed(buf)) {
-			buf[HEADER_TYPE_INDEX] = RP_SER_PACKET_TYPE_ERROR;
-			buf[1] = (uint8_t)code;
-			buf[2] = (uint8_t)location;
-			buf[3] = (uint8_t)fatal;
-			*(int *)&buf[4] = (int)err;
-			rp_trans_send(&rp->endpoint, buf, 1 + 3 * sizeof(uint8_t) + sizeof(int));
-		}
+static void send_simple(struct rp_ser *rp, const uint8_t *packet, size_t len) {
+	uint8_t *buf;
+	rp_trans_alloc_tx_buf(&rp->endpoint, &buf, len);
+	if (!rp_trans_alloc_failed(buf)) {
+		memcpy(buf, packet, len);
+		rp_trans_send(&rp->endpoint, buf, len);
 	}
-	rp_ser_error_handler(rp, location, code, fatal, err);
+}
+
+static void rp_ser_error(struct rp_ser *rp, rp_ser_error_location_t location, uint8_t code, rp_err_t err, int flags)
+{
+	if (flags & ERROR_FLAG_NOTIFY_REMOTE) {
+		struct error_packet packet;
+		packet.header.type = RP_SER_PACKET_TYPE_ERR;
+		packet.data.code = code;
+		packet.data.location = (uint8_t)location;
+		packet.data.fatal = (flags & ERROR_FLAG_FATAL) ? 1 : 0;
+		packet.data.err = err;
+		send_simple(rp, (const uint8_t *)&packet, sizeof(struct error_packet));
+	}
+	rp_ser_error_handler(rp, location, code, err, (flags & ERROR_FLAG_FATAL));
 }
 
 static void parse_error(struct rp_ser *rp, const uint8_t* buf, size_t len)
 {
-	rp_ser_error_location_t location;
-	uint8_t code;
-	bool fatal;
-	rp_err_t err;
+	struct error_packet packet;
 
-	if (len < 3 * sizeof(uint8_t) + sizeof(int)) {
+	if (len < sizeof(struct error_packet)) {
+		rp_ser_handler_decoding_done(rp);
+		RP_LOG_ERR("Invalid error packet received");
+		rp_ser_error_handler(rp, RP_SER_ERROR_ON_RECEIVE, RP_SER_CMD_EVT_CODE_UNKNOWN, RP_ERROR_INTERNAL, true);
 		return;
 	}
 
-	code = buf[0];
-	fatal = (bool)buf[1];
-	location = (rp_ser_error_location_t)buf[2] | RP_SER_ERROR_ON_REMOTE;
-	err = (rp_err_t)(*(int *)&buf[3]);
-	rp_ser_error_handler(rp, location, code, fatal, err);
+	memcpy(&packet, buf, sizeof(struct error_packet));
+
+	rp_ser_handler_decoding_done(rp);
+
+	rp_ser_error_handler(rp, packet.data.location, packet.data.code, packet.data.fatal, packet.data.err | RP_SER_ERROR_ON_REMOTE);
 }
 
 static void handler_execute(struct rp_ser *rp,
@@ -135,38 +160,33 @@ static void event_execute(struct rp_ser *rp, uint8_t evt, const uint8_t *packet,
 	handler_execute(rp, evt, packet, len, rp->conf->evt_begin, rp->conf->evt_end);
 }
 
-static void received_data_parse(struct rp_ser *rp, const uint8_t *data, size_t len)
+static int received_data_parse(struct rp_ser *rp, const uint8_t *data, size_t len)
 {
+	int result;
 	uint8_t packet_type;
 	bool prev_wait_for_ack;
 
-	if (data == NULL) {
-	 	printk("filtered %d\n", len);
-		rp->waiting_for_ack = false;
-		if (len != FILTERED_ACK || !USE_EVENT_ACK) {
-			RP_LOG_ERR("Invalid packet");
-			goto exit_with_error;
-		}
-	}
 
- 	printbuf("received_data_parse", data, len);
+	rp->decoding_done_required = true;
 
 	if (len < RP_SER_CMD_EVT_HADER_SIZE) {
 		RP_LOG_ERR("Packet too small");
-		goto exit_with_error;
+		result = RP_ERROR_INTERNAL;
+		goto exit_function;
 	}
 
 	packet_type = data[HEADER_TYPE_INDEX];
+	result = packet_type;
 
 	switch (packet_type) {
 	case RP_SER_PACKET_TYPE_CMD:
+		RP_LOG_DBG("Command received");
 		if (USE_EVENT_ACK) {
 			// If we are executing command then the other end is waiting for
 			// response, so sending notifications and commands is available again now.
 			prev_wait_for_ack = rp->waiting_for_ack;
 			rp->waiting_for_ack = false;
 		}
-		RP_LOG_DBG("Command received");
 		cmd_execute(rp, data[HEADER_CODE_INDEX], &data[RP_SER_CMD_EVT_HADER_SIZE], len - RP_SER_CMD_EVT_HADER_SIZE);
 		if (USE_EVENT_ACK) {
 			// Resore previous state of waiting for ack
@@ -174,28 +194,32 @@ static void received_data_parse(struct rp_ser *rp, const uint8_t *data, size_t l
 		}
 		break;
 
-	case RP_SER_PACKET_TYPE_EVENT:
+	case RP_SER_PACKET_TYPE_EVT:
 		RP_LOG_DBG("Event received");
 		event_execute(rp, data[HEADER_CODE_INDEX], &data[RP_SER_CMD_EVT_HADER_SIZE], len - RP_SER_CMD_EVT_HADER_SIZE);
 		if (USE_EVENT_ACK) {
 			packet_type = RP_SER_PACKET_TYPE_ACK;
-			rp_trans_send(&rp->endpoint, &packet_type, RP_SER_RSP_ACK_HEADER_SIZE); // DKTODO: rp trans Alloc required!!! e.g. send_simple_packet
+			send_simple(rp, &packet_type, 1);
 		}
 		break;
 
-	case RP_SER_PACKET_TYPE_ERROR:
-		parse_error(rp, &data[RP_SER_ERROR_HADER_SIZE], len - RP_SER_ERROR_HADER_SIZE);
-		break;
+	case RP_SER_PACKET_TYPE_ERR:
+		RP_LOG_DBG("Error received");
+		parse_error(rp, data, len);
+		return RP_ERROR_REMOTE;
 
 	default:
 		RP_LOG_ERR("Unknown packet received");
-		goto exit_with_error;
+		result = RP_ERROR_INVALID_STATE;
+		break;
 	}
 
-	return;
-
-exit_with_error:
-	rp_ser_error(rp, RP_SER_ERROR_ON_RECEIVE, RP_SER_CMD_EVT_CODE_UNKNOWN, true, RP_ERROR_INTERNAL);
+exit_function:
+	rp_ser_handler_decoding_done(rp);
+	if (result < 0) {
+		rp_ser_error(rp, RP_SER_ERROR_ON_RECEIVE, RP_SER_CMD_EVT_CODE_UNKNOWN, true, result);
+	}
+	return result;
 }
 
 static void transport_handler(struct rp_trans_endpoint *endpoint,
@@ -205,7 +229,17 @@ static void transport_handler(struct rp_trans_endpoint *endpoint,
 
 	printbuf("transport_handler", buf, length);
 
-	received_data_parse(rp, buf, length);
+	if (buf != NULL) {
+		received_data_parse(rp, buf, length);
+	} else {
+	 	printk("filtered %d\n", length);
+		if (length != FILTERED_ACK || !USE_EVENT_ACK) {
+			RP_LOG_ERR("Invalid packet");
+			rp_ser_error(rp, RP_SER_ERROR_ON_RECEIVE, RP_SER_CMD_EVT_CODE_UNKNOWN, true, RP_ERROR_INVALID_STATE);
+		} else {
+			rp->waiting_for_ack = false;
+		}
+	}
 }
 
 static uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
@@ -251,6 +285,7 @@ static uint32_t transport_filter(struct rp_trans_endpoint *endpoint,
 // Call after send of command to wait for response
 static int wait_for_response(struct rp_ser *rp) // NEXT: Add buffer output parameter for inline decoder
 {
+	int type;
 	const uint8_t *packet;
 	int packet_length;
 
@@ -269,25 +304,20 @@ static int wait_for_response(struct rp_ser *rp) // NEXT: Add buffer output param
 
 		printbuf("wait_for_response", packet, packet_length);
 
-		switch (packet[HEADER_TYPE_INDEX])
-		{
+		type = received_data_parse(rp, packet, packet_length);
+
 		/* NEXT: Allow inline decoder
 		case RP_SER_PACKET_TYPE_RSP:
 			if (out_packet) {
 				*out_packet = packet;
 			}
 			return packet_length;*/
-		case RP_SER_PACKET_TYPE_CMD:
-		case RP_SER_PACKET_TYPE_EVENT:
-			// rp_trans_read_end will be called indirectly from command/event decoder
-			received_data_parse(rp, packet, packet_length);
-			break;
-		case RP_SER_PACKET_TYPE_ERROR:
-			// rp_trans_read_end will be called indirectly from command/event decoder
-			received_data_parse(rp, packet, packet_length);
-			return RP_ERROR_REMOTE;
-		default:
-			RP_LOG_ERR("Invalid response");
+
+		if (type == RP_SER_PACKET_TYPE_CMD || type == RP_SER_PACKET_TYPE_EVT) {
+			// nothing to do
+		} else if (type < 0) {
+			return type;
+		} else {
 			return RP_ERROR_INVALID_STATE;
 		}
 	} while (true);
@@ -297,6 +327,7 @@ static int wait_for_response(struct rp_ser *rp) // NEXT: Add buffer output param
 // can handle this packet imidetally.
 static rp_err_t wait_for_last_ack(struct rp_ser *rp)
 {
+	int type;
 	const uint8_t *packet;
 	int packet_length;
 
@@ -319,19 +350,13 @@ static rp_err_t wait_for_last_ack(struct rp_ser *rp)
 
 		printbuf("wait_for_last_ack", packet, packet_length);
 
-		switch (packet[HEADER_TYPE_INDEX])
-		{
-		case RP_SER_PACKET_TYPE_CMD:
-		case RP_SER_PACKET_TYPE_EVENT:
-			// rp_trans_read_end will be called indirectly from command/event decoder
-			received_data_parse(rp, packet, packet_length);
-			break;
-		case RP_SER_PACKET_TYPE_ERROR:
-			// rp_trans_read_end will be called indirectly from command/event decoder
-			received_data_parse(rp, packet, packet_length);
-			return RP_ERROR_REMOTE;
-		default:
-			RP_LOG_ERR("Invalid response");
+		type = received_data_parse(rp, packet, packet_length);
+
+		if (type == RP_SER_PACKET_TYPE_CMD || type == RP_SER_PACKET_TYPE_EVT) {
+			// nothing to do
+		} else if (type < 0) {
+			return type;
+		} else {
 			return RP_ERROR_INVALID_STATE;
 		}
 	} while (true);
@@ -423,7 +448,7 @@ rp_err_t rp_ser_evt_send(struct rp_ser *rp,
 	__ASSERT(rp, "Instance cannot be NULL");
 	__ASSERT(packet, "Packet cannot be NULL");
 
-	full_packet[HEADER_TYPE_INDEX] = RP_SER_PACKET_TYPE_EVENT;
+	full_packet[HEADER_TYPE_INDEX] = RP_SER_PACKET_TYPE_EVT;
 	full_packet[HEADER_CODE_INDEX] = evt;
 
 	/* Endpoint is not accessible by other thread from this point */
@@ -500,7 +525,10 @@ void rp_ser_rsp_send_no_err(struct rp_ser *rp,
 
 void rp_ser_handler_decoding_done(struct rp_ser *rp)
 {
-	rp_trans_release_buffer(&rp->endpoint);
+	if (rp->decoding_done_required) {
+		rp->decoding_done_required = false;
+		rp_trans_release_buffer(&rp->endpoint);
+	}
 }
 
 rp_err_t rp_ser_init(struct rp_ser *rp)

@@ -128,7 +128,10 @@ struct rp_ser {
 	rp_ser_response_handler_t rsp_handler;
 
 	/** Is this instance waiting for the event acknowledge */
-	bool waiting_for_ack;
+	bool waiting_for_ack; // DKTODO: bit flags to save a memory
+
+	/** Does this instance have to report decoding done  */
+	bool decoding_done_required;
 };
 
 /**@brief Macro for defining the Remote Procedure Serialization instance.
@@ -301,14 +304,14 @@ void rp_ser_handler_decoding_done(struct rp_ser *rp);
  */
 #define RP_SER_CMD_ALLOC(_rp_buf_name, _rp, _size)			              \
 	uint8_t *RP_CONCAT(_rp_buf_name, _buf);                                       \
-	rp_trans_alloc_tx_buf(&(_rp)->endpoint, &RP_CONCAT(_rp_buf_name, _buf), RP_SER_CMD_EVT_HADER_SIZE, _size); \
+	rp_trans_alloc_tx_buf(&(_rp)->endpoint, &RP_CONCAT(_rp_buf_name, _buf), RP_SER_CMD_EVT_HADER_SIZE + (_size)); \
 	uint8_t *_rp_buf_name = &RP_CONCAT(_rp_buf_name, _buf)[RP_SER_CMD_EVT_HADER_SIZE];                                       \
 
 #define RP_SER_EVT_ALLOC(_rp_buf_name, _rp, _size) RP_SER_CMD_ALLOC(_rp_buf_name, _rp, _size)
 
 #define RP_SER_RSP_ALLOC(_rp_buf_name, _rp, _size)			              \
 	uint8_t *RP_CONCAT(_rp_buf_name, _buf);                                       \
-	rp_trans_alloc_tx_buf(&(_rp)->endpoint, &RP_CONCAT(_rp_buf_name, _buf), RP_SER_RSP_ACK_HEADER_SIZE, _size); \
+	rp_trans_alloc_tx_buf(&(_rp)->endpoint, &RP_CONCAT(_rp_buf_name, _buf), RP_SER_RSP_ACK_HEADER_SIZE + (_size)); \
 	uint8_t *_rp_buf_name = &RP_CONCAT(_rp_buf_name, _buf)[RP_SER_RSP_ACK_HEADER_SIZE];                                       \
 
 #define RP_SER_ALLOC_FAILED(_rp_buf_name) \
