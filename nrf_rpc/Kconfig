@@ -1,0 +1,29 @@
+#
+# Copyright (c) 2020 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+#
+
+menuconfig NRF_RPC
+	bool "nRF RPC (Remote Procedure Call) library"
+	help
+	  Enable nRF RPC (Remote Procedure Call) library
+
+if NRF_RPC
+
+config NRF_RPC_CBOR
+	default true
+	bool "Add TinyCBOR layer"
+	help
+	  Adds API that helps use of TinyCBOR library for data serialization.
+
+choice
+	prompt "nRF RPC transport layer"
+	default NRF_RPC_TR_RPMSG
+
+config NRF_RPC_TR_RPMSG
+	bool "nRF RPC over RPMsg"
+
+endchoice
+
+endif # NRF_RPC

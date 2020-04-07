@@ -11,9 +11,9 @@
 
 #include <cbor.h>
 
-#include <rp_errors.h>
-#include <rp_common.h>
-#include <rp_trans.h>
+#include <nrf_rpc_errors.h>
+#include <nrf_rpc_common.h>
+#include <nrf_rpc_tr.h>
 
 /**
  * @file
