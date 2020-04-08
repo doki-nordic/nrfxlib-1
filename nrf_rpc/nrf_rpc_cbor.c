@@ -104,7 +104,7 @@ static rp_err_t response_parse(struct rp_ser *rp, const uint8_t *data,
 			return RP_ERROR_INTERNAL;
 		    }
 
-		/* Extend paraser to handle more than one item. * /
+		/ * Extend paraser to handle more than one item. * /
 		value.remaining = UINT32_MAX;
 	}
 
@@ -294,7 +294,7 @@ static int wait_for_response(struct rp_ser *rp) // NEXT: Add buffer output param
 
 		switch (packet[0])
 		{
-		/* NEXT: Allow inline decoder
+		/ * NEXT: Allow inline decoder
 		case RP_SER_PACKET_TYPE_RSP:
 			if (out_packet) {
 				*out_packet = packet;
@@ -358,12 +358,12 @@ rp_err_t rp_ser_cmd_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf, // NEXT: 
 		return RP_ERROR_NULL;
 	}
 
-	/* Encode NULL value to indicate packet end. * /
+	/ * Encode NULL value to indicate packet end. * /
 	if (cbor_encode_null(encoder) != CborNoError) { // NEXT: Move to cbor layer
 		return RP_ERROR_INTERNAL;
 	}
 
-	/* Calculate TinyCbor packet size * /
+	/ * Calculate TinyCbor packet size * /
 	rp_buf->packet_size += cbor_encoder_get_buffer_size(encoder,
 							    buf_tail_get(rp_buf)); // NEXT: Move to cbor layer
 
@@ -404,12 +404,12 @@ rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
 		return RP_ERROR_NULL;
 	}
 
-	/* Encode NULL value to indicate packet end. * /
+	/ * Encode NULL value to indicate packet end. * /
 	if (cbor_encode_null(encoder) != CborNoError) {
 		return RP_ERROR_INTERNAL;
 	}
 
-	/* Calculate TinyCbor packet size * /
+	/ * Calculate TinyCbor packet size * /
 	rp_buf->packet_size += cbor_encoder_get_buffer_size(encoder,
 							    buf_tail_get(rp_buf));
 	if (rp_buf->packet_size < 1) {
@@ -440,12 +440,12 @@ rp_err_t rp_ser_rsp_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
 		return RP_ERROR_NULL;
 	}
 
-	/* Encode NULL value to indicate packet end. * /
+	/ * Encode NULL value to indicate packet end. * /
 	if (cbor_encode_null(encoder) != CborNoError) {
 		return RP_ERROR_INTERNAL;
 	}
 
-	/* Calculate TinyCbor packet size * /
+	/ * Calculate TinyCbor packet size * /
 	rp_buf->packet_size += cbor_encoder_get_buffer_size(encoder,
 							    buf_tail_get(rp_buf));
 	if (rp_buf->packet_size < 1) {

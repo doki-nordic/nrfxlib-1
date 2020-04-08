@@ -12,16 +12,16 @@ extern "C" {
 #endif
 
 typedef enum {
-	RP_SUCCESS              = 0,
-	RP_ERROR_NO_MEM         = -1,
-	RP_ERROR_INVALID_PARAM  = -2,
-	RP_ERROR_NULL           = -3,
-	RP_ERROR_NOT_SUPPORTED  = -4,
-	RP_ERROR_INTERNAL       = -5,
-	RP_ERROR_OS_ERROR       = -6,
-	RP_ERROR_INVALID_STATE  = -7,
-	RP_ERROR_BUSY           = -8,
-	RP_ERROR_REMOTE         = -9,
+	NRF_RPC_SUCCESS            = 0,
+	NRF_RPC_ERR_NO_MEM         = -1,
+	NRF_RPC_ERR_INVALID_PARAM  = -2,
+	NRF_RPC_ERR_NULL           = -3,
+	NRF_RPC_ERR_NOT_SUPPORTED  = -4,
+	NRF_RPC_ERR_INTERNAL       = -5,
+	NRF_RPC_ERR_OS_ERROR       = -6,
+	NRF_RPC_ERR_INVALID_STATE  = -7,
+	NRF_RPC_ERR_BUSY           = -8,
+	NRF_RPC_ERR_REMOTE         = -9,
 } rp_err_t;
 
 #ifdef __cplusplus

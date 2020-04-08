@@ -1,3 +1,113 @@
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+
+#include <nrf_rpc_errors.h>
+#include <nrf_rpc_common.h>
+#include <nrf_rpc_tr.h>
+
+#define _NRF_RPC_HEADER_SIZE 2
+
+#define _NRF_RPC_FLAG_RELEASE_EP 1
+#define _NRF_RPC_FLAG_NOERR 2
+#define _NRF_RPC_FLAG_ERROR 4
+
+typedef rp_err_t (*nrf_rpc_response_handler)(const uint8_t *packet, size_t len,
+				  void* handler_data);
+
+typedef rp_err_t (*nrf_rpc_decoder_handler)(uint8_t cmd, const uint8_t *packet, size_t len,
+				  void* handler_data);
+
+/**@brief Command/event decoder structure. */
+struct rp_ser_decoder {
+	/** Command/event code. */
+	uint8_t code;
+
+	/** Command/event decoder. */
+	rp_ser_decoder_handler_t func;
+};
+
+struct nrf_rpc_group {
+	struct nrf_rpc_tr_group tr_group;
+	struct rp_ser_decoder *cmd_begin;
+	struct rp_ser_decoder *cmd_end;
+	struct rp_ser_decoder *evt_begin;
+	struct rp_ser_decoder *evt_end;
+};
+
+struct nrf_rpc_remote_ep {
+	struct nrf_rpc_tr_remote_ep tr_ep;
+};
+
+struct nrf_rpc_local_ep {
+	struct nrf_rpc_tr_local_ep tr_ep;
+	uint32_t waiting_for_ack_mask;
+	struct nrf_rpc_remote_ep *waiting_for_ack_from;
+	bool release_buffer_done;
+	nrf_rpc_response_handler handler;
+	void *handler_data;
+};
+
+
+#if defined(nrf_rpc_tr_alloc_tx_buf)
+/* nrf_rpc_tr_alloc_tx_buf is a macro, so we cannot wrap it with a function. */
+
+#define NRF_RPC_CMD_ALLOC(group, packet, len, ...)			       \
+	uint32_t _nrf_rpc_flags = _nrf_rpc_cmd_prepare((group));	       \
+	nrf_rpc_tr_alloc_tx_buf(NULL, (packet),				       \
+				_NRF_RPC_HEADER_SIZE + (len));		       \
+	if (nrf_rpc_tr_alloc_failed(*(packet))) {			       \
+		_nrf_rpc_cmd_alloc_error(_nrf_rpc_flags);		       \
+		__VA_ARGS__;						       \
+	}								       \
+	*(uint8_t **)(packet) += _NRF_RPC_HEADER_SIZE
+
+uint32_t _nrf_rpc_cmd_prepare(struct nrf_rpc_group *group);
+void _nrf_rpc_cmd_alloc_error(uint32_t flags);
+
+#define NRF_RPC_CMD_ALLOC_FAILED(packet)				       \
+	nrf_rpc_tr_alloc_failed(((uint8_t *)(packet) -			       \
+				_NRF_RPC_HEADER_SIZE))
+
+#define NRF_RPC_CMD_FREE(packet)					       \
+	_nrf_rpc_cmd_unprepare(_nrf_rpc_flags);				       \
+	nrf_rpc_tr_free_tx_buf(NULL, packet)
+
+void _nrf_rpc_cmd_unprepare(uint32_t flags);
+
+#else
+
+#define NRF_RPC_CMD_ALLOC(group, packet, len, ...)			       \
+	uint32_t _nrf_rpc_flags = _nrf_rpc_cmd_alloc((group), (packet), (len));\
+	if (_nrf_rpc_flags == _NRF_RPC_FLAG_NOMEM) {			       \
+		__VA_ARGS__;						       \
+	}								       \
+	
+uint32_t _nrf_rpc_cmd_alloc(struct nrf_rpc_group *group, uint8_t **packet,
+			    size_t len);
+
+#define NRF_RPC_CMD_ALLOC_FAILED(packet) (_nrf_rpc_flags == _NRF_RPC_FLAG_NOMEM)
+
+#define NRF_RPC_CMD_FREE(packet) _nrf_rpc_cmd_free(packet)
+
+uint32_t _nrf_rpc_cmd_free(uint8_t *packet);
+
+#endif
+
+#define NRF_RPC_CMD_SEND(group, cmd, packet, len, handler, handler_data)	       \
+	_nrf_rpc_cmd_send((group), (cmd), (packet), (len), (handler), (handler_data),   \
+			  _nrf_rpc_flags)
+
+#define NRF_RPC_CMD_SEND_NOERR(group, cmd, packet, len, handler, handler_data)	       \
+	_nrf_rpc_cmd_send((group), (cmd), (packet), (len), (handler), (handler_data),   \
+			  _nrf_rpc_flags | _NRF_RPC_FLAG_NOERR)
+
+rp_err_t _nrf_rpc_cmd_send(struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet, size_t len,
+			   nrf_rpc_response_handler handler, void *handler_data,
+			   uint32_t flags);
+
+#if 0
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
@@ -337,3 +447,4 @@ void rp_ser_handler_decoding_done(struct rp_ser *rp);
 
 #endif /* RP
  * @brief Remote procedures OS specific API_SER_H_ */
+#endif
