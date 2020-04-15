@@ -27,11 +27,6 @@ enum {
 	PACKET_TYPE_ERR = 0x04,
 };
 
-enum {
-	FILTERED_RSP,
-	FILTERED_ACK,
-};
-
 const uintptr_t __attribute__((__section__(".nrf_rpc.grp."))) groups_before = 0;
 const uintptr_t __attribute__((__section__(".nrf_rpc.grp.}"))) groups_after = 0;
 
@@ -267,7 +262,7 @@ static rp_err_t wait_for_response(struct nrf_rpc_local_ep *local)
 		}
 
 		if (buf == NULL) {
-			if (len == FILTERED_RSP) {
+			if (len == PACKET_TYPE_RSP) {
 				break;
 			} else {
 				continue;
@@ -337,6 +332,69 @@ rp_err_t _nrf_rpc_rsp_send(uint8_t *packet, size_t len)
 
 	return err;
 }
+
+static void receive_handler(struct nrf_rpc_tr_local_ep *dst_ep,
+					   struct nrf_rpc_tr_remote_ep *src_ep,
+					   const uint8_t *buf, size_t len)
+{
+	struct nrf_rpc_local_ep *local_ep = CONTAINER_OF(dst_ep, struct nrf_rpc_local_ep, tr_ep);
+
+	if (buf != NULL) {
+		parse_incoming_packet(local_ep, src_ep, buf, len, false);
+	} else {
+	 	printk("filtered %d\n", len);
+	}
+}
+
+static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *dst_ep,
+				      struct nrf_rpc_tr_remote_ep *src_ep,
+				      const uint8_t *buf, size_t len)
+{
+	rp_err_t err;
+	struct nrf_rpc_local_ep *local_ep = CONTAINER_OF(dst_ep, struct nrf_rpc_local_ep, tr_ep);
+	uint8_t type;
+
+	type = buf[0];
+
+	switch (type) {
+	case PACKET_TYPE_ACK:
+		nrf_rpc_tr_remote_release(src_ep);
+		return type;
+	
+	case PACKET_TYPE_ERR:
+		// TODO: report error
+		return type;
+	
+	case PACKET_TYPE_RDY:
+		// TODO: implement for limiting events
+		return type;
+
+	case PACKET_TYPE_RSP:
+		if (local_ep->handler) {
+			err = local_ep->handler(&buf[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, local_ep->handler_data);
+			local_ep->handler = NULL;
+			local_ep->handler_data = NULL;
+			if (err) {
+				RP_LOG_ERR("Response handler returned an error %d", err);
+				// TODO: report error
+				//rp_ser_error(rp, RP_SER_ERROR_ON_RECEIVING_RSP, RP_SER_CMD_EVT_CODE_UNKNOWN, false, err);
+			}
+			return type;
+		}
+		break;
+	
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+rp_err_t nrf_rpc_init(void)
+{
+	return nrf_rpc_tr_init(receive_handler, filter_handler);
+}
+
 
 #pragma region xxxxxx
 #if 0

@@ -155,6 +155,8 @@ void nrf_rpc_decoding_done();
 #define NRF_RPC_USER_GROUP_FIRST 64
 #define NRF_RPC_USER_GROUP_LAST 127
 
+rp_err_t nrf_rpc_init(void);
+
 #if 0
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
