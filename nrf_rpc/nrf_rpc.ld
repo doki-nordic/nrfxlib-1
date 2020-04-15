@@ -1,4 +1,4 @@
-	SECTION_DATA_PROLOGUE(rp_ser_decoder,,SUBALIGN(4))
+	SECTION_DATA_PROLOGUE(nrf_rpc,,SUBALIGN(4))
 	{
-		KEEP(*(SORT_BY_NAME(".rp_ser_decoder*")))
+		KEEP(*(SORT_BY_NAME(".nrf_rpc.*")))
 	} GROUP_LINK_IN(ROMABLE_REGION)

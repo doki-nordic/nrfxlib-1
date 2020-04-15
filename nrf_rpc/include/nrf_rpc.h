@@ -9,31 +9,25 @@
 
 #define _NRF_RPC_HEADER_SIZE 2
 
-#define _NRF_RPC_FLAG_RELEASE_EP 1
-#define _NRF_RPC_FLAG_NOERR 2
-#define _NRF_RPC_FLAG_ERROR 4
-
-typedef rp_err_t (*nrf_rpc_response_handler)(const uint8_t *packet, size_t len,
-				  void* handler_data);
-
-typedef rp_err_t (*nrf_rpc_decoder_handler)(uint8_t cmd, const uint8_t *packet, size_t len,
-				  void* handler_data);
+typedef rp_err_t (*nrf_rpc_handler)(const uint8_t *packet, size_t len, void *handler_data);
 
 /**@brief Command/event decoder structure. */
-struct rp_ser_decoder {
+struct nrf_rpc_decoder {
+
 	/** Command/event code. */
 	uint8_t code;
 
 	/** Command/event decoder. */
-	rp_ser_decoder_handler_t func;
+	nrf_rpc_handler handler;
 };
 
 struct nrf_rpc_group {
+	uint8_t group_id;
 	struct nrf_rpc_tr_group tr_group;
-	struct rp_ser_decoder *cmd_begin;
-	struct rp_ser_decoder *cmd_end;
-	struct rp_ser_decoder *evt_begin;
-	struct rp_ser_decoder *evt_end;
+	const struct nrf_rpc_decoder *cmd_begin;
+	const struct nrf_rpc_decoder *cmd_end;
+	const struct nrf_rpc_decoder *evt_begin;
+	const struct nrf_rpc_decoder *evt_end;
 };
 
 struct nrf_rpc_remote_ep {
@@ -42,11 +36,20 @@ struct nrf_rpc_remote_ep {
 
 struct nrf_rpc_local_ep {
 	struct nrf_rpc_tr_local_ep tr_ep;
+	struct nrf_rpc_remote_ep *default_dst;
+	uint32_t cmd_nesting_counter;
+	nrf_rpc_handler handler;
+#if !defined(CONFIG_NRF_RPC_LIMIT_EVENTS)
+	/* A trick to save memory for unused fields `waiting_for_ack_mask` and
+	 * `waiting_for_ack_from` if CONFIG_NRF_RPC_LIMIT_EVENTS is disabled.*/
+	union {
+#endif
+	void *handler_data;
 	uint32_t waiting_for_ack_mask;
 	struct nrf_rpc_remote_ep *waiting_for_ack_from;
-	bool release_buffer_done;
-	nrf_rpc_response_handler handler;
-	void *handler_data;
+#if !defined(CONFIG_NRF_RPC_LIMIT_EVENTS)
+	};
+#endif
 };
 
 
@@ -54,58 +57,103 @@ struct nrf_rpc_local_ep {
 /* nrf_rpc_tr_alloc_tx_buf is a macro, so we cannot wrap it with a function. */
 
 #define NRF_RPC_CMD_ALLOC(group, packet, len, ...)			       \
-	uint32_t _nrf_rpc_flags = _nrf_rpc_cmd_prepare((group));	       \
-	nrf_rpc_tr_alloc_tx_buf(NULL, (packet),				       \
+	struct nrf_rpc_tr_remote_ep *_nrf_rpc_alloc_ep = _nrf_rpc_cmd_prepare();	       \
+	nrf_rpc_tr_alloc_tx_buf(_nrf_rpc_alloc_ep, (packet),				       \
 				_NRF_RPC_HEADER_SIZE + (len));		       \
 	if (nrf_rpc_tr_alloc_failed(*(packet))) {			       \
-		_nrf_rpc_cmd_alloc_error(_nrf_rpc_flags);		       \
+		_nrf_rpc_cmd_alloc_error();		       \
 		__VA_ARGS__;						       \
 	}								       \
 	*(uint8_t **)(packet) += _NRF_RPC_HEADER_SIZE
-
-uint32_t _nrf_rpc_cmd_prepare(struct nrf_rpc_group *group);
-void _nrf_rpc_cmd_alloc_error(uint32_t flags);
 
 #define NRF_RPC_CMD_ALLOC_FAILED(packet)				       \
 	nrf_rpc_tr_alloc_failed(((uint8_t *)(packet) -			       \
 				_NRF_RPC_HEADER_SIZE))
 
 #define NRF_RPC_CMD_FREE(packet)					       \
-	_nrf_rpc_cmd_unprepare(_nrf_rpc_flags);				       \
-	nrf_rpc_tr_free_tx_buf(NULL, packet)
+	_nrf_rpc_cmd_unprepare();				       \
+	nrf_rpc_tr_free_tx_buf(_nrf_rpc_alloc_ep, packet)
 
-void _nrf_rpc_cmd_unprepare(uint32_t flags);
+
+#define NRF_RPC_RSP_ALLOC(packet, len, ...)			       \
+	struct nrf_rpc_tr_remote_ep *_nrf_rpc_alloc_ep = _nrf_rpc_rsp_prepare();	       \
+	nrf_rpc_tr_alloc_tx_buf(_nrf_rpc_alloc_ep, (packet),				       \
+				_NRF_RPC_HEADER_SIZE + (len));		       \
+	if (nrf_rpc_tr_alloc_failed(*(packet))) {			       \
+		__VA_ARGS__;						       \
+	}								       \
+	*(uint8_t **)(packet) += _NRF_RPC_HEADER_SIZE
+
+#define NRF_RPC_RSP_ALLOC_FAILED(packet)				       \
+	nrf_rpc_tr_alloc_failed(((uint8_t *)(packet) -			       \
+				_NRF_RPC_HEADER_SIZE))
+
+#define NRF_RPC_RSP_FREE(packet)					       \
+	nrf_rpc_tr_free_tx_buf(_nrf_rpc_alloc_ep, packet)
+
+struct nrf_rpc_tr_remote_ep *_nrf_rpc_cmd_prepare(void);
+void _nrf_rpc_cmd_alloc_error();
+void _nrf_rpc_cmd_unprepare();
+struct nrf_rpc_tr_remote_ep *_nrf_rpc_rsp_prepare();
 
 #else
 
-#define NRF_RPC_CMD_ALLOC(group, packet, len, ...)			       \
-	uint32_t _nrf_rpc_flags = _nrf_rpc_cmd_alloc((group), (packet), (len));\
-	if (_nrf_rpc_flags == _NRF_RPC_FLAG_NOMEM) {			       \
-		__VA_ARGS__;						       \
-	}								       \
-	
-uint32_t _nrf_rpc_cmd_alloc(struct nrf_rpc_group *group, uint8_t **packet,
-			    size_t len);
-
-#define NRF_RPC_CMD_ALLOC_FAILED(packet) (_nrf_rpc_flags == _NRF_RPC_FLAG_NOMEM)
-
-#define NRF_RPC_CMD_FREE(packet) _nrf_rpc_cmd_free(packet)
-
-uint32_t _nrf_rpc_cmd_free(uint8_t *packet);
+//TODO: this option
 
 #endif
 
 #define NRF_RPC_CMD_SEND(group, cmd, packet, len, handler, handler_data)	       \
-	_nrf_rpc_cmd_send((group), (cmd), (packet), (len), (handler), (handler_data),   \
-			  _nrf_rpc_flags)
+	_nrf_rpc_cmd_send((group), (cmd), (packet), (len), (handler), (handler_data))
 
 #define NRF_RPC_CMD_SEND_NOERR(group, cmd, packet, len, handler, handler_data)	       \
-	_nrf_rpc_cmd_send((group), (cmd), (packet), (len), (handler), (handler_data),   \
-			  _nrf_rpc_flags | _NRF_RPC_FLAG_NOERR)
+	_nrf_rpc_cmd_send((group), (cmd), (packet), (len), (handler), (handler_data)) // TODO: send_noerr
 
-rp_err_t _nrf_rpc_cmd_send(struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet, size_t len,
-			   nrf_rpc_response_handler handler, void *handler_data,
-			   uint32_t flags);
+rp_err_t _nrf_rpc_cmd_send(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet, size_t len,
+			   nrf_rpc_handler handler, void *handler_data);
+
+#define NRF_RPC_RSP_SEND(packet, len)	       \
+	_nrf_rpc_rsp_send((packet), (len))
+
+#define NRF_RPC_RSP_SEND_NOERR(packet, len)	       \
+	_nrf_rpc_rsp_send((packet), (len)) // TODO: noerr
+
+rp_err_t _nrf_rpc_rsp_send(uint8_t *packet, size_t len);
+
+void nrf_rpc_decoding_done();
+
+#define NRF_RPC_GROUP_DEFINE(_name, _id) \
+	const uintptr_t RP_CONCAT(_name, _cmd_before) __used               \
+	__attribute__((__section__(".nrf_rpc.cmd." RP_STRINGIFY(_name) ".")));      \
+	const uintptr_t RP_CONCAT(_name, _cmd_after) __used               \
+	__attribute__((__section__(".nrf_rpc.cmd." RP_STRINGIFY(_name) ".}")));      \
+	const uintptr_t RP_CONCAT(_name, _evt_before) __used               \
+	__attribute__((__section__(".nrf_rpc.evt." RP_STRINGIFY(_name) ".")));      \
+	const uintptr_t RP_CONCAT(_name, _evt_after) __used               \
+	__attribute__((__section__(".nrf_rpc.evt." RP_STRINGIFY(_name) ".}")));      \
+										  \
+	const struct nrf_rpc_group _name                                   \
+	__attribute__((__section__(".nrf_rpc.grp." RP_STRINGIFY(_name))))      \
+	 = {		  \
+		.group_id = (_id), \
+		/* TODO: .tr_gruop */ \
+		.cmd_begin = (const struct nrf_rpc_decoder*)(&RP_CONCAT(_name, _cmd_before) + 1),		  \
+		.cmd_end = (const struct nrf_rpc_decoder*)&RP_CONCAT(_name, _cmd_after),			          \
+		.evt_begin = (const struct nrf_rpc_decoder*)(&RP_CONCAT(_name, _evt_before) + 1),		  \
+		.evt_end = (const struct nrf_rpc_decoder*)&RP_CONCAT(_name, _evt_after),				  \
+	};
+
+
+#define NRF_RPC_CMD_DECODER(_group, _name, _cmd, _handler, _handler_data) \
+	RP_STATIC_ASSERT(_cmd <= 0xFE, "Command out of range");     \
+	const struct nrf_rpc_decoder RP_CONCAT(_name, _cmd_dec) __used   \
+	__attribute__((__section__(".nrf_rpc.cmd." RP_STRINGIFY(_group)       \
+				   "." RP_STRINGIFY(_name)))) = {   \
+		.code = _cmd,					    \
+		.handler = _handler,				    \
+	}
+
+#define NRF_RPC_USER_GROUP_FIRST 64
+#define NRF_RPC_USER_GROUP_LAST 127
 
 #if 0
 /*
