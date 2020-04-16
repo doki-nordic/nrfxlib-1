@@ -11,11 +11,13 @@
 
 #include <nrf_rpc_rpmsg.h>
 
-#endif  /* CONFIG_RMPSG_TRANSPORT */
-
-#if defined(CONFIG_NRF_RPC_TR_CUSTOM)
+#elif defined(CONFIG_NRF_RPC_TR_CUSTOM)
 
 #include CONFIG_NRF_RPC_TR_CUSTOM
+
+#else
+
+#error No transport implementation selected for NRF_RPC
 
 #endif  /* CONFIG_NRF_RPC_TR_CUSTOM */
 
