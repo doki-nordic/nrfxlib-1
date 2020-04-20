@@ -26,7 +26,6 @@ struct nrf_rpc_decoder {
 
 struct nrf_rpc_group {
 	uint8_t group_id;
-	struct nrf_rpc_tr_group tr_group;
 	const void *cmd_array;
 	const void *evt_array;
 };
@@ -85,16 +84,30 @@ struct nrf_rpc_local_ep {
 	}								       \
 	*(uint8_t **)(packet) += _NRF_RPC_HEADER_SIZE
 
-#define NRF_RPC_RSP_ALLOC_FAILED(packet)				       \
-	nrf_rpc_tr_alloc_failed(((uint8_t *)(packet) -			       \
-				_NRF_RPC_HEADER_SIZE))
-
 #define NRF_RPC_RSP_FREE(packet)					       \
 	nrf_rpc_tr_free_tx_buf(_nrf_rpc_alloc_ep, packet)
+
+#define NRF_RPC_EVT_ALLOC(group, packet, len, ...)			       \
+	struct nrf_rpc_tr_remote_ep *_nrf_rpc_alloc_ep = _nrf_rpc_evt_prepare();	       \
+	nrf_rpc_tr_alloc_tx_buf(_nrf_rpc_alloc_ep, (packet),				       \
+				_NRF_RPC_HEADER_SIZE + (len));		       \
+	if (nrf_rpc_tr_alloc_failed(*(packet))) {			       \
+		_nrf_rpc_evt_alloc_error(_nrf_rpc_alloc_ep);		       \
+		__VA_ARGS__;						       \
+	}								       \
+	*(uint8_t **)(packet) += _NRF_RPC_HEADER_SIZE
+
+#define NRF_RPC_EVT_FREE(packet)					       \
+	_nrf_rpc_evt_unprepare(_nrf_rpc_alloc_ep);				       \
+	nrf_rpc_tr_free_tx_buf(_nrf_rpc_alloc_ep, packet)
+
 
 struct nrf_rpc_tr_remote_ep *_nrf_rpc_cmd_prepare(void);
 void _nrf_rpc_cmd_alloc_error();
 void _nrf_rpc_cmd_unprepare();
+struct nrf_rpc_tr_remote_ep *_nrf_rpc_evt_prepare(void);
+void _nrf_rpc_evt_alloc_error(struct nrf_rpc_tr_remote_ep *remote_ep);
+void _nrf_rpc_evt_unprepare(struct nrf_rpc_tr_remote_ep *remote_ep);
 struct nrf_rpc_tr_remote_ep *_nrf_rpc_rsp_prepare();
 
 #else
@@ -119,6 +132,11 @@ rp_err_t _nrf_rpc_cmd_send(const struct nrf_rpc_group *group, uint8_t cmd, uint8
 	_nrf_rpc_rsp_send((packet), (len)) // TODO: noerr
 
 rp_err_t _nrf_rpc_rsp_send(uint8_t *packet, size_t len);
+
+#define NRF_RPC_EVT_SEND(group, evt, packet, len)	       \
+	_nrf_rpc_evt_send(_nrf_rpc_alloc_ep, (group), (evt), (packet), (len))
+
+rp_err_t _nrf_rpc_evt_send(struct nrf_rpc_tr_remote_ep *remote_ep, const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet, size_t len);
 
 void nrf_rpc_decoding_done();
 
@@ -210,6 +228,14 @@ extern struct _nrf_rpc_ord_var_entry *_nrf_rpc_ord_var_first;
 	NRF_RPC_ORD_VAR_CREATE(const struct nrf_rpc_decoder, RP_CONCAT(_name, _cmd_dec), "cmd_" RP_STRINGIFY(_group), RP_STRINGIFY(_name)) \
 	 = {   \
 		.code = _cmd,					    \
+		.handler = _handler,				    \
+	}
+
+#define NRF_RPC_EVT_DECODER(_group, _name, _evt, _handler) \
+	RP_STATIC_ASSERT(_evt <= 0xFE, "Event out of range");     \
+	NRF_RPC_ORD_VAR_CREATE(const struct nrf_rpc_decoder, RP_CONCAT(_name, _evt_dec), "evt_" RP_STRINGIFY(_group), RP_STRINGIFY(_name)) \
+	 = {   \
+		.code = _evt,					    \
 		.handler = _handler,				    \
 	}
 

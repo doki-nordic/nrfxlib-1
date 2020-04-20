@@ -93,12 +93,133 @@ static void cmd_execute(uint8_t cmd, const uint8_t *packet, size_t len, const st
 	handler_execute(cmd, packet, len, group->cmd_array);
 }
 
-#if 0
-static void event_execute(uint8_t evt, const uint8_t *packet, size_t len, const struct nrf_rpc_group *group)
+static void evt_execute(uint8_t evt, const uint8_t *packet, size_t len, const struct nrf_rpc_group *group)
 {
 	handler_execute(evt, packet, len, group->evt_array);
 }
-#endif
+
+static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep, struct nrf_rpc_tr_remote_ep *src_tr_ep, const uint8_t *buf, size_t len, bool response_expected)
+{
+	int result;
+	uint8_t type;
+	const struct nrf_rpc_group *group = NULL;
+	uint8_t code = 0;
+	struct nrf_rpc_remote_ep *old_default_dst;
+	struct nrf_rpc_remote_ep *old_waiting_for_ack_from;
+	struct nrf_rpc_remote_ep *src = RP_CONTAINER_OF(src_tr_ep, struct nrf_rpc_remote_ep, tr_ep);
+
+	if (len < _NRF_RPC_HEADER_SIZE) {
+		result = NRF_RPC_ERR_INTERNAL;
+		goto exit_function;
+	}
+
+	type = buf[0];
+	code = buf[1];
+	if (code != 0xFF) {
+		group = group_from_id(type & 0x7F);
+		type &= 0x80;
+	}
+
+	result = type;
+
+	switch (type)
+	{
+	case PACKET_TYPE_CMD:
+		if (!group) {
+			result = NRF_RPC_ERR_INTERNAL;
+			goto exit_function;
+		}
+		if (IS_ENABLED(CONFIG_NRF_RPC_LIMIT_EVENTS)) {
+			old_waiting_for_ack_from = local_ep->waiting_for_ack_from;
+			local_ep->waiting_for_ack_from = NULL;
+		}
+		old_default_dst = local_ep->default_dst;
+		local_ep->default_dst = src;
+		cmd_execute(code, &buf[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, group);
+		local_ep->default_dst = old_default_dst;
+		if (IS_ENABLED(CONFIG_NRF_RPC_LIMIT_EVENTS)) {
+			local_ep->waiting_for_ack_from = old_waiting_for_ack_from;
+		}
+		break;
+
+	case PACKET_TYPE_EVT:
+		if (!group) {
+			result = NRF_RPC_ERR_INTERNAL;
+			goto exit_function;
+		}
+		evt_execute(code, &buf[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, group);
+		result = send_simple(&local_ep->tr_ep, &nrf_rpc_tr_control_ep, PACKET_TYPE_ACK, 0xFF, NULL, 0);
+		break;
+
+	case PACKET_TYPE_RSP:
+		if (response_expected) {
+			return type;
+		} else {
+			result = NRF_RPC_ERR_INVALID_STATE;
+		}
+		break;
+
+	case PACKET_TYPE_ERR:
+		// TODO: error reporting
+		break;
+	
+	case PACKET_TYPE_ACK:
+	case PACKET_TYPE_RDY:
+	default:
+		result = NRF_RPC_ERR_INVALID_STATE;
+		break;
+	}
+
+exit_function:
+	nrf_rpc_tr_release_buffer(&local_ep->tr_ep);
+	if (result < 0) {
+		// TODO: rp_ser_error(rp, RP_SER_ERROR_ON_RECEIVE, RP_SER_CMD_EVT_CODE_UNKNOWN, true, result);
+	}
+	return result;
+}
+
+void nrf_rpc_decoding_done()
+{
+	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
+	nrf_rpc_tr_release_buffer(tr_local_ep);
+}
+
+
+static rp_err_t wait_for_response(struct nrf_rpc_local_ep *local)
+{
+	uint8_t type;
+	int len;
+	struct nrf_rpc_tr_remote_ep *src_tr_ep;
+	const uint8_t *buf;
+
+	do {
+		len = nrf_rpc_tr_read(&local->tr_ep, &src_tr_ep, &buf);
+
+		if (len < 0) {
+			// TODO: error reporting
+			return  len;
+		}
+
+		if (buf == NULL) {
+			if (len == PACKET_TYPE_RSP) {
+				break;
+			} else {
+				continue;
+			}
+		}
+
+		type = parse_incoming_packet(local, src_tr_ep, buf, len, false); // TODO: response_expected==true on inline decoder
+
+		if (type < 0) {
+			return type;
+		}
+
+	} while (type != PACKET_TYPE_RSP);
+
+	// TODO: inline decoder
+
+	return NRF_RPC_SUCCESS;
+}
 
 static rp_err_t wait_for_ack(struct nrf_rpc_local_ep *src)
 {
@@ -170,122 +291,49 @@ void _nrf_rpc_cmd_alloc_error()
 	_nrf_rpc_cmd_unprepare();
 }
 
-static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep, struct nrf_rpc_tr_remote_ep *src_tr_ep, const uint8_t *buf, size_t len, bool response_expected)
+struct nrf_rpc_tr_remote_ep *_nrf_rpc_evt_prepare(void)
 {
-	int result;
-	uint8_t type;
-	const struct nrf_rpc_group *group = NULL;
-	uint8_t code = 0;
-	struct nrf_rpc_remote_ep *old_default_dst;
-	struct nrf_rpc_remote_ep *old_waiting_for_ack_from;
-	struct nrf_rpc_remote_ep *src = RP_CONTAINER_OF(src_tr_ep, struct nrf_rpc_remote_ep, tr_ep);
-
-	if (len < _NRF_RPC_HEADER_SIZE) {
-		result = NRF_RPC_ERR_INTERNAL;
-		goto exit_function;
-	}
-
-	type = buf[0];
-	code = buf[1];
-	if (code != 0xFF) {
-		group = group_from_id(type & 0x7F);
-		type &= 0x80;
-	}
-
-	result = type;
-
-	switch (type)
-	{
-	case PACKET_TYPE_CMD:
-		if (!group) {
-			result = NRF_RPC_ERR_INTERNAL;
-			goto exit_function;
-		}
-		if (IS_ENABLED(CONFIG_NRF_RPC_LIMIT_EVENTS)) {
-			old_waiting_for_ack_from = local_ep->waiting_for_ack_from;
-			local_ep->waiting_for_ack_from = NULL;
-		}
-		old_default_dst = local_ep->default_dst;
-		local_ep->default_dst = src;
-		cmd_execute(code, &buf[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, group);
-		local_ep->default_dst = old_default_dst;
-		if (IS_ENABLED(CONFIG_NRF_RPC_LIMIT_EVENTS)) {
-			local_ep->waiting_for_ack_from = old_waiting_for_ack_from;
-		}
-		break;
-
-	case PACKET_TYPE_EVT:
-		// TODO: events
-		break;
-
-	case PACKET_TYPE_RSP:
-		if (response_expected) {
-			return type;
-		} else {
-			result = NRF_RPC_ERR_INVALID_STATE;
-		}
-		break;
-
-	case PACKET_TYPE_ERR:
-		// TODO: error reporting
-		break;
-	
-	case PACKET_TYPE_ACK:
-	case PACKET_TYPE_RDY:
-	default:
-		result = NRF_RPC_ERR_INVALID_STATE;
-		break;
-	}
-
-exit_function:
-	nrf_rpc_tr_release_buffer(&local_ep->tr_ep);
-	if (result < 0) {
-		// TODO: rp_ser_error(rp, RP_SER_ERROR_ON_RECEIVE, RP_SER_CMD_EVT_CODE_UNKNOWN, true, result);
-	}
-	return result;
-}
-
-void nrf_rpc_decoding_done()
-{
+	rp_err_t err;
 	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
-	nrf_rpc_tr_release_buffer(tr_local_ep);
+	struct nrf_rpc_local_ep *local_ep = RP_CONTAINER_OF(tr_local_ep, struct nrf_rpc_local_ep, tr_ep);
+
+	printk("_nrf_rpc_evt_prepare\n");
+
+	if (IS_ENABLED(CONFIG_NRF_RPC_LIMIT_EVENTS)) {
+		err = wait_for_ack(local_ep);
+		if (err != NRF_RPC_SUCCESS) {
+			// TODO: handle error
+			return NULL;
+		}
+	}
+
+	return nrf_rpc_tr_remote_reserve();
 }
 
-
-static rp_err_t wait_for_response(struct nrf_rpc_local_ep *local)
+void _nrf_rpc_evt_alloc_error(struct nrf_rpc_tr_remote_ep *remote_ep)
 {
-	uint8_t type;
-	int len;
-	struct nrf_rpc_tr_remote_ep *src_tr_ep;
-	const uint8_t *buf;
+	_nrf_rpc_evt_unprepare(remote_ep);
+}
 
-	do {
-		len = nrf_rpc_tr_read(&local->tr_ep, &src_tr_ep, &buf);
+void _nrf_rpc_evt_unprepare(struct nrf_rpc_tr_remote_ep *remote_ep)
+{
+	nrf_rpc_tr_remote_release(remote_ep);
+}
 
-		if (len < 0) {
-			// TODO: error reporting
-			return  len;
-		}
+rp_err_t _nrf_rpc_evt_send(struct nrf_rpc_tr_remote_ep *remote_ep, const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet, size_t len)
+{
+	rp_err_t err;
+	struct nrf_rpc_tr_local_ep *tr_src = nrf_rpc_tr_current_get();
+	uint8_t *full_packet = &packet[-_NRF_RPC_HEADER_SIZE];
 
-		if (buf == NULL) {
-			if (len == PACKET_TYPE_RSP) {
-				break;
-			} else {
-				continue;
-			}
-		}
+	full_packet[0] = PACKET_TYPE_EVT | group->group_id;
+	full_packet[1] = evt;
 
-		type = parse_incoming_packet(local, src_tr_ep, buf, len, false); // TODO: response_expected==true on inline decoder
+	printbuf("_nrf_rpc_evt_send", full_packet, len + _NRF_RPC_HEADER_SIZE);
 
-		if (type < 0) {
-			return type;
-		}
-
-	} while (type != PACKET_TYPE_RSP);
-
-	// TODO: inline decoder
-
-	return NRF_RPC_SUCCESS;
+	err = nrf_rpc_tr_send(tr_src, remote_ep, full_packet, len + _NRF_RPC_HEADER_SIZE);
+	
+	return err;
 }
 
 rp_err_t _nrf_rpc_cmd_send(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet, size_t len,
@@ -370,6 +418,7 @@ static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *dst_ep,
 	switch (type) {
 	case PACKET_TYPE_ACK:
 		nrf_rpc_tr_remote_release(src_ep);
+		printk("PACKET_TYPE_ACK\n");
 		return type;
 	
 	case PACKET_TYPE_ERR:
