@@ -7,10 +7,6 @@
 #define RP_LOG_MODULE SER_CORE
 #include <rp_log.h>
 
-/////////////////////////////////////////
-//#define CONFIG_NRF_RPC_LIMIT_EVENTS 1
-/////////////////////////////////////////
-
 enum {
 	/* Header variant 1: 
 	 *      byte 0: bit 7: packet type, bits 6-0: group id,
@@ -105,7 +101,6 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep, struct nrf_r
 	const struct nrf_rpc_group *group = NULL;
 	uint8_t code = 0;
 	struct nrf_rpc_remote_ep *old_default_dst;
-	struct nrf_rpc_remote_ep *old_waiting_for_ack_from;
 	struct nrf_rpc_remote_ep *src = RP_CONTAINER_OF(src_tr_ep, struct nrf_rpc_remote_ep, tr_ep);
 
 	if (len < _NRF_RPC_HEADER_SIZE) {
@@ -129,17 +124,10 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep, struct nrf_r
 			result = NRF_RPC_ERR_INTERNAL;
 			goto exit_function;
 		}
-		if (IS_ENABLED(CONFIG_NRF_RPC_LIMIT_EVENTS)) {
-			old_waiting_for_ack_from = local_ep->waiting_for_ack_from;
-			local_ep->waiting_for_ack_from = NULL;
-		}
 		old_default_dst = local_ep->default_dst;
 		local_ep->default_dst = src;
 		cmd_execute(code, &buf[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, group);
 		local_ep->default_dst = old_default_dst;
-		if (IS_ENABLED(CONFIG_NRF_RPC_LIMIT_EVENTS)) {
-			local_ep->waiting_for_ack_from = old_waiting_for_ack_from;
-		}
 		break;
 
 	case PACKET_TYPE_EVT:
@@ -221,35 +209,12 @@ static rp_err_t wait_for_response(struct nrf_rpc_local_ep *local)
 	return NRF_RPC_SUCCESS;
 }
 
-static rp_err_t wait_for_ack(struct nrf_rpc_local_ep *src)
-{
-	if (src->waiting_for_ack_from == NULL) {
-		return NRF_RPC_SUCCESS;
-	}
-	send_simple(&src->tr_ep, &src->waiting_for_ack_from->tr_ep, PACKET_TYPE_RDY, 0, NULL, 0);
-	/* error code from send_simple may be ignored, because this
-	 * packet is an optimization that is not mandatory. */
-	while (src->waiting_for_ack_mask && src->waiting_for_ack_from->tr_ep.addr_mask) {
-		// TODO: read and parse incoming packets
-	}
-	return NRF_RPC_SUCCESS;
-}
-
 struct nrf_rpc_tr_remote_ep *_nrf_rpc_cmd_prepare()
 {
-	rp_err_t err;
 	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
 	struct nrf_rpc_local_ep *local_ep = RP_CONTAINER_OF(tr_local_ep, struct nrf_rpc_local_ep, tr_ep);
 
 	printk("_nrf_rpc_cmd_prepare\n");
-
-	if (IS_ENABLED(CONFIG_NRF_RPC_LIMIT_EVENTS)) {
-		err = wait_for_ack(local_ep);
-		if (err != NRF_RPC_SUCCESS) {
-			// TODO: handle error
-			return NULL;
-		}
-	}
 
 	if (local_ep->default_dst == NULL) {
 		struct nrf_rpc_tr_remote_ep *tr_remote_ep = nrf_rpc_tr_remote_reserve();
@@ -293,20 +258,7 @@ void _nrf_rpc_cmd_alloc_error()
 
 struct nrf_rpc_tr_remote_ep *_nrf_rpc_evt_prepare(void)
 {
-	rp_err_t err;
-	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
-	struct nrf_rpc_local_ep *local_ep = RP_CONTAINER_OF(tr_local_ep, struct nrf_rpc_local_ep, tr_ep);
-
 	printk("_nrf_rpc_evt_prepare\n");
-
-	if (IS_ENABLED(CONFIG_NRF_RPC_LIMIT_EVENTS)) {
-		err = wait_for_ack(local_ep);
-		if (err != NRF_RPC_SUCCESS) {
-			// TODO: handle error
-			return NULL;
-		}
-	}
-
 	return nrf_rpc_tr_remote_reserve();
 }
 

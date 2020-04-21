@@ -39,17 +39,7 @@ struct nrf_rpc_local_ep {
 	struct nrf_rpc_remote_ep *default_dst;
 	uint32_t cmd_nesting_counter;
 	nrf_rpc_handler handler;
-#if !defined(CONFIG_NRF_RPC_LIMIT_EVENTS)
-	/* A trick to save memory for unused fields `waiting_for_ack_mask` and
-	 * `waiting_for_ack_from` if CONFIG_NRF_RPC_LIMIT_EVENTS is disabled.*/
-	union {
-#endif
 	void *handler_data;
-	uint32_t waiting_for_ack_mask;
-	struct nrf_rpc_remote_ep *waiting_for_ack_from;
-#if !defined(CONFIG_NRF_RPC_LIMIT_EVENTS)
-	};
-#endif
 };
 
 
