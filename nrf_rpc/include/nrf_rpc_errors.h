@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-enum {
+enum nrf_rpc_error_code {
 	NRF_RPC_SUCCESS            = 0,
 	NRF_RPC_ERR_NO_MEM         = -1,
 	NRF_RPC_ERR_INVALID_PARAM  = -2,

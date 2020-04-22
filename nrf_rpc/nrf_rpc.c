@@ -207,7 +207,7 @@ exit_function:
 	return result;
 }
 
-void nrf_rpc_decoding_done()
+void nrf_rpc_decoding_done(void)
 {
 	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
 	nrf_rpc_tr_release_buffer(tr_local_ep);
