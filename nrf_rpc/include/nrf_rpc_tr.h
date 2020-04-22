@@ -13,12 +13,12 @@
 
 #elif defined(CONFIG_NRF_RPC_TR_CUSTOM)
 
-#include CONFIG_NRF_RPC_TR_CUSTOM
+#include CONFIG_NRF_RPC_TR_CUSTOM_INCLUDE
 
 #else
 
-#error No transport implementation selected for NRF_RPC
+#error No transport implementation selected for nRF RPC
 
-#endif  /* CONFIG_NRF_RPC_TR_CUSTOM */
+#endif
 
 #endif  /* RP_TRANS_H_ */

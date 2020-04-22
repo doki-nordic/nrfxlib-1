@@ -74,6 +74,24 @@ extern "C" {
 
 #define RP_STATIC_ASSERT(...)           \
 	__RP_STATIC_ASSERT(__VA_ARGS__)
+
+#define NRF_RPC_ORD_VAR_CREATE(_type, _name, _array_key, _var_key)	       \
+	_type _name __used						       \
+	__attribute__((__section__(".nrf_rpc." _array_key ".b." _var_key)))
+
+#define NRF_RPC_ORD_VAR_ARRAY(_name, _array_key)			       \
+	const uint8_t RP_CONCAT(_name, _ord_var_end) __used		       \
+	__attribute__((__section__(".nrf_rpc." _array_key ".c")));	       \
+	const uint8_t *const _name __used				       \
+	__attribute__((__section__(".nrf_rpc." _array_key ".a"))) =	       \
+		&RP_CONCAT(_name, _ord_var_end);
+
+#define NRF_RPC_ORD_VAR_FOR_EACH(_it, _var, _array_ptr, _type)		       \
+	for ((_var) = (_type *)((const uint8_t *const *)(_array_ptr) + 1);     \
+		(const uint8_t *const)_var <				       \
+			*(const uint8_t *const *)(_array_ptr);		       \
+		(_var) = (_type *)(_var) + 1, (void)_it)
+
 /**
  * @}
  */

@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-typedef enum {
+enum {
 	NRF_RPC_SUCCESS            = 0,
 	NRF_RPC_ERR_NO_MEM         = -1,
 	NRF_RPC_ERR_INVALID_PARAM  = -2,
@@ -22,7 +22,7 @@ typedef enum {
 	NRF_RPC_ERR_INVALID_STATE  = -7,
 	NRF_RPC_ERR_BUSY           = -8,
 	NRF_RPC_ERR_REMOTE         = -9,
-} rp_err_t;
+};
 
 #ifdef __cplusplus
 }
