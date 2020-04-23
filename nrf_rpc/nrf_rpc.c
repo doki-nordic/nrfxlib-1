@@ -35,29 +35,30 @@ enum {
 };
 
 
-NRF_RPC_ORD_VAR_ARRAY(nrf_rpc_groups_array, "grp");
+NRF_RPC_AUTO_ARR(nrf_rpc_groups_array, "grp");
 
 
 static int send_simple(struct nrf_rpc_tr_local_ep *local_tr_ep,
-			    struct nrf_rpc_tr_remote_ep *tr_dst, uint8_t type,
-			    uint8_t code, const uint8_t *data, size_t len)
+		       struct nrf_rpc_tr_remote_ep *tr_dst, uint8_t type,
+		       uint8_t code, const uint8_t *packet, size_t len)
 {
-	uint8_t *buf;
+	uint8_t *tx_buf;
 
-	nrf_rpc_tr_alloc_tx_buf(tr_dst, &buf, _NRF_RPC_HEADER_SIZE + len);
-	if (nrf_rpc_tr_alloc_failed(buf)) {
+	nrf_rpc_tr_alloc_tx_buf(tr_dst, &tx_buf, _NRF_RPC_HEADER_SIZE + len);
+	if (nrf_rpc_tr_alloc_failed(tx_buf)) {
 		return NRF_RPC_ERR_NO_MEM;
 	}
 
-	buf[0] = type;
-	buf[1] = code;
+	tx_buf[0] = type;
+	tx_buf[1] = code;
 
-	if (data != NULL && len > 0) {
-		memcpy(&buf[2], data, len);
+	if (packet != NULL && len > 0) {
+		memcpy(&tx_buf[2], packet, len);
 	}
 
-	return nrf_rpc_tr_send(local_tr_ep, tr_dst, buf, _NRF_RPC_HEADER_SIZE + len);
+	return nrf_rpc_tr_send(local_tr_ep, tr_dst, tx_buf, _NRF_RPC_HEADER_SIZE + len);
 }
+
 
 __attribute__((weak))
 void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
@@ -65,6 +66,7 @@ void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 			   bool from_remote)
 {
 }
+
 
 static void report_error(struct nrf_rpc_tr_local_ep *tr_src,
 			 struct nrf_rpc_tr_remote_ep *tr_dst, int code,
@@ -87,15 +89,15 @@ static void report_error(struct nrf_rpc_tr_local_ep *tr_src,
 
 
 static int handler_execute(uint8_t code,
-				const uint8_t *packet,
-				size_t len,
-				const void *array)
+			   const uint8_t *packet,
+			   size_t len,
+			   const void *array)
 {
 	int err;
 	void *iter;
 	const struct nrf_rpc_decoder *decoder;
 
-	NRF_RPC_ORD_VAR_FOR_EACH(iter, decoder, array,
+	NRF_RPC_AUTO_ARR_FOR(iter, decoder, array,
 				 const struct nrf_rpc_decoder) {
 
 		if (code == decoder->code) {
@@ -111,11 +113,13 @@ static int handler_execute(uint8_t code,
 	return NRF_RPC_ERR_NOT_SUPPORTED;
 }
 
+
 static int cmd_execute(uint8_t cmd, const uint8_t *packet, size_t len,
 			    const struct nrf_rpc_group *group)
 {
 	return handler_execute(cmd, packet, len, group->cmd_array);
 }
+
 
 static int evt_execute(uint8_t evt, const uint8_t *packet, size_t len,
 			    const struct nrf_rpc_group *group)
@@ -123,12 +127,13 @@ static int evt_execute(uint8_t evt, const uint8_t *packet, size_t len,
 	return handler_execute(evt, packet, len, group->evt_array);
 }
 
+
 static const struct nrf_rpc_group *group_from_id(uint8_t group_id)
 {
 	void *iter;
 	const struct nrf_rpc_group *group;
 	
-	NRF_RPC_ORD_VAR_FOR_EACH(iter, group, &nrf_rpc_groups_array,
+	NRF_RPC_AUTO_ARR_FOR(iter, group, &nrf_rpc_groups_array,
 				 const struct nrf_rpc_group) {
 
 		if (group->group_id == group_id) {
@@ -139,9 +144,10 @@ static const struct nrf_rpc_group *group_from_id(uint8_t group_id)
 	return NULL;
 }
 
+
 static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 				 struct nrf_rpc_tr_remote_ep *src_tr_ep,
-				 const uint8_t *buf, size_t len,
+				 const uint8_t *packet, size_t len,
 				 bool response_expected)
 {
 	int result;
@@ -156,8 +162,8 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 		goto exit_function;
 	}
 
-	type = buf[0];
-	code = buf[1];
+	type = packet[0];
+	code = packet[1];
 	if (code != 0xFF) {
 		group = group_from_id(type & 0x7F);
 		type &= 0x80;
@@ -174,7 +180,7 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 		}
 		old_default_dst = local_ep->default_dst;
 		local_ep->default_dst = src;
-		result = cmd_execute(code, &buf[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, group);
+		result = cmd_execute(code, &packet[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, group);
 		local_ep->default_dst = old_default_dst;
 		break;
 
@@ -183,7 +189,7 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 			result = NRF_RPC_ERR_INTERNAL;
 			goto exit_function;
 		}
-		evt_execute(code, &buf[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, group);
+		evt_execute(code, &packet[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, group);
 		result = send_simple(&local_ep->tr_ep, NULL, PACKET_TYPE_ACK, 0xFF, NULL, 0);
 		break;
 
@@ -207,6 +213,7 @@ exit_function:
 	return result;
 }
 
+
 void nrf_rpc_decoding_done(void)
 {
 	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
@@ -214,21 +221,21 @@ void nrf_rpc_decoding_done(void)
 }
 
 
-static int wait_for_response(struct nrf_rpc_local_ep *local)
+static int wait_for_response(struct nrf_rpc_local_ep *local, const uint8_t **rsp_packet, size_t *rsp_len)
 {
 	uint8_t type;
 	int len;
 	struct nrf_rpc_tr_remote_ep *src_tr_ep;
-	const uint8_t *buf;
+	const uint8_t *packet;
 
 	do {
-		len = nrf_rpc_tr_read(&local->tr_ep, &src_tr_ep, &buf);
+		len = nrf_rpc_tr_read(&local->tr_ep, &src_tr_ep, &packet);
 
 		if (len < 0) {
 			return  len;
 		}
 
-		if (buf == NULL) {
+		if (packet == NULL) {
 			if (len == PACKET_TYPE_ERR) {
 				return NRF_RPC_ERR_REMOTE;
 			} if (len == PACKET_TYPE_RSP) {
@@ -238,7 +245,8 @@ static int wait_for_response(struct nrf_rpc_local_ep *local)
 			}
 		}
 
-		type = parse_incoming_packet(local, src_tr_ep, buf, len, false); // TODO: response_expected==true on inline decoder
+		type = parse_incoming_packet(local, src_tr_ep, packet, len,
+					     (rsp_packet != NULL));
 
 		if (type < 0) {
 			return type;
@@ -246,12 +254,14 @@ static int wait_for_response(struct nrf_rpc_local_ep *local)
 
 	} while (type != PACKET_TYPE_RSP);
 
-	// TODO: inline decoder
+	*rsp_packet = &packet[_NRF_RPC_HEADER_SIZE];
+	*rsp_len = len - _NRF_RPC_HEADER_SIZE;
 
 	return NRF_RPC_SUCCESS;
 }
 
-struct nrf_rpc_remote_ep *_nrf_rpc_cmd_prepare(const struct nrf_rpc_group *group)
+
+struct nrf_rpc_remote_ep *_nrf_rpc_cmd_prep(const struct nrf_rpc_group *group)
 {
 	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
 	struct nrf_rpc_local_ep *local_ep = RP_CONTAINER_OF(tr_local_ep, struct nrf_rpc_local_ep, tr_ep);
@@ -273,6 +283,7 @@ struct nrf_rpc_remote_ep *_nrf_rpc_cmd_prepare(const struct nrf_rpc_group *group
 	return local_ep->default_dst;
 }
 
+
 void _nrf_rpc_cmd_alloc_error(struct nrf_rpc_remote_ep *remote_ep)
 {
 	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
@@ -280,10 +291,11 @@ void _nrf_rpc_cmd_alloc_error(struct nrf_rpc_remote_ep *remote_ep)
 	RP_LOG_ERR("Command allocation failed");
 	report_error(tr_local_ep, &remote_ep->tr_ep, NRF_RPC_ERR_NO_MEM, 0);
 
-	_nrf_rpc_cmd_unprepare();
+	_nrf_rpc_cmd_unprep();
 }
 
-void _nrf_rpc_cmd_unprepare(void)
+
+void _nrf_rpc_cmd_unprep(void)
 {
 	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
 	struct nrf_rpc_local_ep *local_ep = RP_CONTAINER_OF(tr_local_ep, struct nrf_rpc_local_ep, tr_ep);
@@ -295,16 +307,28 @@ void _nrf_rpc_cmd_unprepare(void)
 	}
 }
 
-int nrf_rpc_cmd_send(struct nrf_rpc_remote_ep *remote_ep, uint8_t cmd,
-			  uint8_t *packet, size_t len, nrf_rpc_handler handler,
-			  void *handler_data)
+
+static int cmd_send_common(struct nrf_rpc_remote_ep *remote_ep, uint32_t cmd,
+			   uint8_t *packet, size_t len, void *ptr1, void *ptr2)
 {
 	int err;
-	nrf_rpc_handler old_handler;
+	nrf_rpc_handler_t old_handler;
 	void *old_handler_data;
 	struct nrf_rpc_tr_local_ep *tr_src = nrf_rpc_tr_current_get();
 	struct nrf_rpc_local_ep *src = RP_CONTAINER_OF(tr_src, struct nrf_rpc_local_ep, tr_ep);
 	uint8_t *full_packet = &packet[-_NRF_RPC_HEADER_SIZE];
+	nrf_rpc_handler_t handler = NULL;
+	void *handler_data = NULL;
+	const uint8_t **rsp_packet = NULL;
+	size_t *rsp_len = NULL;
+
+	if (cmd & 0x10000) {
+		rsp_packet = ptr1;
+		rsp_len = ptr2;
+	} else {
+		handler = ptr1;
+		handler_data = ptr2;
+	}
 
 	full_packet[0] = PACKET_TYPE_CMD | remote_ep->current_group_id;
 	full_packet[1] = cmd;
@@ -314,28 +338,50 @@ int nrf_rpc_cmd_send(struct nrf_rpc_remote_ep *remote_ep, uint8_t cmd,
 	src->handler = handler;
 	src->handler_data = handler_data;
 
-	printbuf("_nrf_rpc_cmd_send", full_packet, len + _NRF_RPC_HEADER_SIZE);
+	printbuf("cmd_send_common", full_packet, len + _NRF_RPC_HEADER_SIZE);
 
 	err = nrf_rpc_tr_send(tr_src, &remote_ep->tr_ep, full_packet, len + _NRF_RPC_HEADER_SIZE);
 	if (err != NRF_RPC_SUCCESS) {
 		goto error_exit;
 	}
 
-	err = wait_for_response(src);
+	err = wait_for_response(src, rsp_packet, rsp_len);
 
 error_exit:
 
-	_nrf_rpc_cmd_unprepare();
+	_nrf_rpc_cmd_unprep();
+
+	if (err < 0) {
+		nrf_rpc_tr_release_buffer(tr_src);
+	}
 
 	src->handler = old_handler;
 	src->handler_data = old_handler_data;
 
 	return err;
-
 }
 
+
+int nrf_rpc_cmd_send(struct nrf_rpc_remote_ep *remote_ep, uint8_t cmd,
+		     uint8_t *packet, size_t len, nrf_rpc_handler_t handler,
+		     void *handler_data)
+{
+	return cmd_send_common(remote_ep, cmd, packet, len, handler,
+			       handler_data);
+}
+
+
+int nrf_rpc_cmd_rsp_send(struct nrf_rpc_remote_ep *remote_ep, uint8_t cmd,
+			 uint8_t *packet, size_t len,
+			 const uint8_t **rsp_packet, size_t *rsp_len)
+{
+	return cmd_send_common(remote_ep, cmd | 0x10000, packet, len,
+			       rsp_packet, rsp_len);
+}
+
+
 void nrf_rpc_cmd_send_noerr(struct nrf_rpc_remote_ep *remote_ep, uint8_t cmd,
-			  uint8_t *packet, size_t len, nrf_rpc_handler handler,
+			  uint8_t *packet, size_t len, nrf_rpc_handler_t handler,
 			  void *handler_data)
 {
 	int err;
@@ -350,7 +396,8 @@ void nrf_rpc_cmd_send_noerr(struct nrf_rpc_remote_ep *remote_ep, uint8_t cmd,
 	}
 }
 
-struct nrf_rpc_remote_ep *_nrf_rpc_evt_prepare(const struct nrf_rpc_group *group)
+
+struct nrf_rpc_remote_ep *_nrf_rpc_evt_prep(const struct nrf_rpc_group *group)
 {
 	struct nrf_rpc_tr_remote_ep *tr_remote_ep = nrf_rpc_tr_remote_reserve();
 	struct nrf_rpc_remote_ep *remote_ep = RP_CONTAINER_OF(tr_remote_ep, struct nrf_rpc_remote_ep, tr_ep);
@@ -361,18 +408,21 @@ struct nrf_rpc_remote_ep *_nrf_rpc_evt_prepare(const struct nrf_rpc_group *group
 	return remote_ep;
 }
 
+
 void _nrf_rpc_evt_alloc_error(struct nrf_rpc_remote_ep *remote_ep)
 {
 	RP_LOG_ERR("Event allocation failed");
 	report_error(NULL, &remote_ep->tr_ep, NRF_RPC_ERR_NO_MEM, 0);
 
-	_nrf_rpc_evt_unprepare(remote_ep);
+	_nrf_rpc_evt_unprep(remote_ep);
 }
 
-void _nrf_rpc_evt_unprepare(struct nrf_rpc_remote_ep *remote_ep)
+
+void _nrf_rpc_evt_unprep(struct nrf_rpc_remote_ep *remote_ep)
 {
 	nrf_rpc_tr_remote_release(&remote_ep->tr_ep);
 }
+
 
 int nrf_rpc_evt_send(struct nrf_rpc_remote_ep *remote_ep, uint8_t evt,
 			  uint8_t *packet, size_t len)
@@ -390,6 +440,7 @@ int nrf_rpc_evt_send(struct nrf_rpc_remote_ep *remote_ep, uint8_t evt,
 	return err;
 }
 
+
 void nrf_rpc_evt_send_noerr(struct nrf_rpc_remote_ep *remote_ep, uint8_t evt,
 			  uint8_t *packet, size_t len)
 {
@@ -402,7 +453,8 @@ void nrf_rpc_evt_send_noerr(struct nrf_rpc_remote_ep *remote_ep, uint8_t evt,
 	}
 }
 
-struct nrf_rpc_remote_ep *_nrf_rpc_rsp_prepare(void)
+
+struct nrf_rpc_remote_ep *_nrf_rpc_rsp_prep(void)
 {
 	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
 	struct nrf_rpc_local_ep *local_ep = RP_CONTAINER_OF(tr_local_ep, struct nrf_rpc_local_ep, tr_ep);
@@ -430,16 +482,17 @@ int nrf_rpc_rsp_send(struct nrf_rpc_remote_ep *remote_ep, uint8_t *packet,
 	return err;
 }
 
+
 static void receive_handler(struct nrf_rpc_tr_local_ep *dst_ep,
 					   struct nrf_rpc_tr_remote_ep *src_ep,
-					   const uint8_t *buf, int len)
+					   const uint8_t *packet, int len)
 {
 	int err;
 	struct nrf_rpc_local_ep *local_ep = RP_CONTAINER_OF(dst_ep, struct nrf_rpc_local_ep, tr_ep);
 
-	if (buf != NULL) {
-		printbuf("receive_handler1", buf, len);
-		err = parse_incoming_packet(local_ep, src_ep, buf, len, false);
+	if (packet != NULL) {
+		printbuf("receive_handler1", packet, len);
+		err = parse_incoming_packet(local_ep, src_ep, packet, len, false);
 		if (err < 0) {
 			RP_LOG_ERR("Error parsing incoming packet %d", err);
 			report_error(dst_ep, src_ep, err, ERROR_FLAG_SEND);
@@ -449,9 +502,10 @@ static void receive_handler(struct nrf_rpc_tr_local_ep *dst_ep,
 	}
 }
 
+
 static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *dst_ep,
 				      struct nrf_rpc_tr_remote_ep *src_ep,
-				      const uint8_t *buf, int len)
+				      const uint8_t *packet, int len)
 {
 	int err;
 	struct nrf_rpc_local_ep *local_ep = RP_CONTAINER_OF(dst_ep, struct nrf_rpc_local_ep, tr_ep);
@@ -467,7 +521,7 @@ static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *dst_ep,
 		return PACKET_TYPE_ERR;
 	}
 
-	type = buf[0];
+	type = packet[0];
 
 	switch (type) {
 	case PACKET_TYPE_ACK:
@@ -478,13 +532,13 @@ static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *dst_ep,
 	
 	case PACKET_TYPE_ERR:
 		if (len >= 1 + _NRF_RPC_HEADER_SIZE) {
-			report_error(dst_ep, src_ep, (int8_t)buf[_NRF_RPC_HEADER_SIZE], ERROR_FLAG_REMOTE);
+			report_error(dst_ep, src_ep, (int8_t)packet[_NRF_RPC_HEADER_SIZE], ERROR_FLAG_REMOTE);
 		}
 		return type;
 	
 	case PACKET_TYPE_RSP:
 		if (dst_ep != NULL && local_ep->handler) {
-			err = local_ep->handler(&buf[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, local_ep->handler_data);
+			err = local_ep->handler(&packet[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, local_ep->handler_data);
 			local_ep->handler = NULL;
 			local_ep->handler_data = NULL;
 			if (err) {
@@ -501,6 +555,7 @@ static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *dst_ep,
 
 	return 0;
 }
+
 
 int nrf_rpc_init(void)
 {
