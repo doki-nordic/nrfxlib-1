@@ -23,3 +23,4 @@ Semiconductor. Refer to their respective documentation for more information.
    nrf_security/README
    nfc/README
    zboss/README
+   nrf_rpc/README
