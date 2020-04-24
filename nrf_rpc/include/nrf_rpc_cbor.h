@@ -112,12 +112,12 @@ struct rp_ser_conf {
  * @param[in] _handler Command decoder function @ref cmd_handler_t.
  * /
 #define RP_SER_CMD_DECODER(_rp_inst, _name, _cmd, _handler)         \
-	RP_STATIC_ASSERT(_cmd <= 0xFF, "Command out of range");     \
-	const struct rp_ser_cmd RP_CONCAT(_name, _cmd_dec) __used   \
-	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder) \
+	NRF_RPC_STATIC_ASSERT(_cmd <= 0xFF, "Command out of range");     \
+	const struct rp_ser_cmd NRF_RPC_CONCAT(_name, _cmd_dec) __used   \
+	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder) \
 				   "." "cmd"                        \
-				   "." RP_STRINGIFY(_rp_inst)       \
-				   "." RP_STRINGIFY(_name)))) = {   \
+				   "." NRF_RPC_STRINGIFY(_rp_inst)       \
+				   "." NRF_RPC_STRINGIFY(_name)))) = {   \
 		.cmd = _cmd,					    \
 		.func = _handler				    \
 	}
@@ -133,12 +133,12 @@ struct rp_ser_conf {
  * @param[in] _handler Event decoder function @ref cmd_handler_t.
  * /
 #define RP_SER_EVT_DECODER(_rp_inst, _name, _evt, _handler)         \
-	RP_STATIC_ASSERT(_evt <= 0xFF, "Event out of range");       \
-	const struct rp_ser_evt RP_CONCAT(_name, _evt_dec) __used   \
-	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder) \
+	NRF_RPC_STATIC_ASSERT(_evt <= 0xFF, "Event out of range");       \
+	const struct rp_ser_evt NRF_RPC_CONCAT(_name, _evt_dec) __used   \
+	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder) \
 				   "." "evt"                        \
-				   "." RP_STRINGIFY(_rp_inst)       \
-				   "." RP_STRINGIFY(_name)))) = {   \
+				   "." NRF_RPC_STRINGIFY(_rp_inst)       \
+				   "." NRF_RPC_STRINGIFY(_name)))) = {   \
 		.evt = _evt                                         \
 		.func = _handler			            \
 	}
@@ -171,34 +171,34 @@ struct rp_ser {
 	 * subsection instance event and command decoders data. The section must  \
 	 * be sorted in alphabetical order to ensure the valid value.             \
 	 * /                                                                       \
-	const struct rp_ser_cmd RP_CONCAT(_name, _cmd_begin) __used               \
-	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder)               \
-				   "." "cmd" "." RP_STRINGIFY(_name) ".")));      \
-		const struct rp_ser_cmd RP_CONCAT(_name, _cmd_end) __used         \
-	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder)               \
-				   "." "cmd" "." RP_STRINGIFY(_name) "." "}")));  \
-		const struct rp_ser_evt RP_CONCAT(_name, _evt_begin) __used       \
-	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder)               \
-				   "." "evt" "." RP_STRINGIFY(_name) ".")));      \
-		const struct rp_ser_evt RP_CONCAT(_name, _evt_end) __used         \
-	__attribute__((__section__("." RP_STRINGIFY(rp_ser_decoder)               \
-				   "." "evt" "." RP_STRINGIFY(_name) "." "}")));  \
+	const struct rp_ser_cmd NRF_RPC_CONCAT(_name, _cmd_begin) __used               \
+	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder)               \
+				   "." "cmd" "." NRF_RPC_STRINGIFY(_name) ".")));      \
+		const struct rp_ser_cmd NRF_RPC_CONCAT(_name, _cmd_end) __used         \
+	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder)               \
+				   "." "cmd" "." NRF_RPC_STRINGIFY(_name) "." "}")));  \
+		const struct rp_ser_evt NRF_RPC_CONCAT(_name, _evt_begin) __used       \
+	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder)               \
+				   "." "evt" "." NRF_RPC_STRINGIFY(_name) ".")));      \
+		const struct rp_ser_evt NRF_RPC_CONCAT(_name, _evt_end) __used         \
+	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder)               \
+				   "." "evt" "." NRF_RPC_STRINGIFY(_name) "." "}")));  \
 										  \
-	RP_TRANS_ENDPOINT_PREPARE(RP_CONCAT(_name, _ep),                          \
+	RP_TRANS_ENDPOINT_PREPARE(NRF_RPC_CONCAT(_name, _ep),                          \
 					    _endpoint_stack_size,                 \
 					    _endpoint_thread_prio);               \
 										  \
-	static const struct rp_ser_conf RP_CONCAT(_name, _conf) = {		  \
-		.cmd_begin = (&RP_CONCAT(_name, _cmd_begin) + 1),		  \
-		.cmd_end = &RP_CONCAT(_name, _cmd_end),			          \
-		.evt_begin = (&RP_CONCAT(_name, _evt_begin) + 1),		  \
-		.evt_end = &RP_CONCAT(_name, _evt_end),				  \
+	static const struct rp_ser_conf NRF_RPC_CONCAT(_name, _conf) = {		  \
+		.cmd_begin = (&NRF_RPC_CONCAT(_name, _cmd_begin) + 1),		  \
+		.cmd_end = &NRF_RPC_CONCAT(_name, _cmd_end),			          \
+		.evt_begin = (&NRF_RPC_CONCAT(_name, _evt_begin) + 1),		  \
+		.evt_end = &NRF_RPC_CONCAT(_name, _evt_end),				  \
 		.ep_number = _endpoint_num,					  \
 	};									  \
 										  \
 	struct rp_ser _name = {							  \
-		.endpoint = RP_TRANS_ENDPOINT_INITIALIZER(RP_CONCAT(_name, _ep)), \
-		.conf = &RP_CONCAT(_name, _conf),				  \
+		.endpoint = RP_TRANS_ENDPOINT_INITIALIZER(NRF_RPC_CONCAT(_name, _ep)), \
+		.conf = &NRF_RPC_CONCAT(_name, _conf),				  \
 	}
 
 /**@brief Macro for declaring a serialization instance (not creating it)
@@ -353,10 +353,10 @@ void rp_ser_decode_done(struct rp_ser *rp);
  *
  * /
 #define rp_ser_buf_alloc(_rp_buf_name, _rp, _size)			              \
-	uint8_t *RP_CONCAT(_rp_buf_name, _buf);                                       \
-	rp_trans_alloc_tx_buf(&_rp.endpoint, &RP_CONCAT(_rp_buf_name, _buf), &_size); \
+	uint8_t *NRF_RPC_CONCAT(_rp_buf_name, _buf);                                       \
+	rp_trans_alloc_tx_buf(&_rp.endpoint, &NRF_RPC_CONCAT(_rp_buf_name, _buf), &_size); \
 	struct rp_ser_buf _rp_buf_name = {                                            \
-		.buf = RP_CONCAT(_rp_buf_name, _buf),                                 \
+		.buf = NRF_RPC_CONCAT(_rp_buf_name, _buf),                                 \
 		.size = _size,                                                        \
 		.packet_size = 0                                                      \
 	}

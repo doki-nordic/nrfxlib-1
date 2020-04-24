@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef RP_COMMON_H_
-#define RP_COMMON_H_
+#ifndef _NRF_RPC_COMMON_H_
+#define _NRF_RPC_COMMON_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,8 +17,9 @@ extern "C" {
  * @brief Common RP serialization API.
  */
 
-/** @brief Internal macro used by @ref RP_CONCAT to perform the expansion in two steps. */
-#define __RP_CONCAT(_x, _y) _x ## _y
+/** @brief Internal macro used by @ref NRF_RPC_CONCAT to perform the expansion
+ * in two steps. */
+#define __NRF_RPC_CONCAT(_x, _y) _x ## _y
 
 /**
  * @brief Macro for concatenating two tokens in macro expansion.
@@ -33,11 +34,12 @@ extern "C" {
  *         a valid token (in such case, the preprocessor issues a warning and
  *         does not perform the concatenation).
  */
-#define RP_CONCAT(_x, _y) \
-	__RP_CONCAT(_x, _y)
+#define NRF_RPC_CONCAT(_x, _y) \
+	__NRF_RPC_CONCAT(_x, _y)
 
-/** @brief Internal macro used by @ref RP_STRINGIFY to perform the expansion in two steps. */
-#define __RP_STRINGIFY(_x) #_x
+/** @brief Internal macro used by @ref NRF_RPC_STRINGIFY to perform the
+ * expansion in two steps. */
+#define __NRF_RPC_STRINGIFY(_x) #_x
 
 /**
  * @brief Macro for converting macro argument into a string constans.
@@ -49,8 +51,8 @@ extern "C" {
  *
  * @return String constant.
  */
-#define RP_STRINGIFY(_x) \
-	__RP_STRINGIFY(_x)
+#define NRF_RPC_STRINGIFY(_x) \
+	__NRF_RPC_STRINGIFY(_x)
 
 /**
  * @brief Retrieve pointer to parent structure.
@@ -61,36 +63,79 @@ extern "C" {
  *
  * @return Pointer to parent structure.
  */
-#define RP_CONTAINER_OF(_ptr, _type, _field_name) \
+#define NRF_RPC_CONTAINER_OF(_ptr, _type, _field_name) \
 	((_type *)(((uint8_t *)_ptr) - offsetof(_type, _field_name)))
 
 #ifdef __GNUC__
-#define __RP_STATIC_ASSERT(_expr, _msg) \
+#define __NRF_RPC_STATIC_ASSERT(_expr, _msg) \
 	_Static_assert(_expr, _msg)
 #else
-#define __RP_STATIC_ASSERT(_expr, _msg) \
+#define __NRF_RPC_STATIC_ASSERT(_expr, _msg) \
 	extern char (*_ignore(void))
 #endif /* __GNUC__ */
 
-#define RP_STATIC_ASSERT(...)           \
-	__RP_STATIC_ASSERT(__VA_ARGS__)
+/**
+ * @brief Compile-time assert.
+ * 
+ * @param _expr Condition that have to be met.
+ * @param _msg  Message shown when condition is not met.
+ */
+#define NRF_RPC_STATIC_ASSERT(_expr, _msg) \
+	__NRF_RPC_STATIC_ASSERT(_expr, _msg)
 
-#define NRF_RPC_AUTO_ARR_ITEM(_type, _name, _array_key, _var_key)	       \
-	_type _name __used						       \
-	__attribute__((__section__(".nrf_rpc." _array_key ".b." _var_key)))
+#if defined(__ASSERT)
+#define __NRF_RPC_ASSERT(_expr) __ASSERT(_expr, "nRF RPC assertion failed");
+#else
+#include <assert.h>
+#define __NRF_RPC_ASSERT assert
+#endif
 
+/** @brief Runtime assert.
+ * 
+ * @param _expr Condition that have to be met.
+ */
+#define NRF_RPC_ASSERT(_expr) \
+	__NRF_RPC_ASSERT(_expr)
+
+/** @brief Creates new automatically registered array.
+ * 
+ * @param _name      Name of the array. Can be used later for 
+ *                   @a NRF_RPC_AUTO_ARR_FOR.
+ * @param _array_key String array unique key that will be used to add items with
+ *                   @a NRF_RPC_AUTO_ARR_ITEM.
+ */
 #define NRF_RPC_AUTO_ARR(_name, _array_key)				       \
-	const uint8_t RP_CONCAT(_name, _ord_var_end) __used		       \
+	const uint8_t NRF_RPC_CONCAT(_name, _ord_var_end) __used	       \
 	__attribute__((__section__(".nrf_rpc." _array_key ".c")));	       \
 	const uint8_t *const _name __used				       \
 	__attribute__((__section__(".nrf_rpc." _array_key ".a"))) =	       \
-		&RP_CONCAT(_name, _ord_var_end);
+		&NRF_RPC_CONCAT(_name, _ord_var_end);
 
+/** @brief Adds new variable to the array.
+ * 
+ * @param _type      Type of the variable.
+ * @param _name      Name of the variable.
+ * @param _array_key String array unique key.
+ * @param _var_key   String item key.
+ */
+#define NRF_RPC_AUTO_ARR_ITEM(_type, _name, _array_key, _item_key)	       \
+	_type _name __used						       \
+	__attribute__((__section__(".nrf_rpc." _array_key ".b." _item_key)))
+
+/** @brief Iterate over array items.
+ * 
+ * This macro must be placed in `for` brackets.
+ * 
+ * @param _it        Pointer variable of type `void *` for iterator.
+ * @param _var       Pointer variable that holds each item of the array.
+ * @param _array_ptr Pointer to array.
+ * @param _type      Type of items in array.
+ */
 #define NRF_RPC_AUTO_ARR_FOR(_it, _var, _array_ptr, _type)		       \
-	for ((_var) = (_type *)((const uint8_t *const *)(_array_ptr) + 1);     \
+	(_var) = (_type *)((const uint8_t *const *)(_array_ptr) + 1);	       \
 		(const uint8_t *const)_var <				       \
 			*(const uint8_t *const *)(_array_ptr);		       \
-		(_var) = (_type *)(_var) + 1, (void)_it)
+		(_var) = (_type *)(_var) + 1, (void)_it
 
 /**
  * @}
@@ -100,4 +145,4 @@ extern "C" {
 }
 #endif
 
-#endif /* RP_COMMON_H_ */
+#endif /* _NRF_RPC_COMMON_H_ */

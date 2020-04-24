@@ -25,7 +25,7 @@ extern "C" {
  * @param format printf-style format string, optionally followed by arguments
  *               to be formatted and inserted in the resulting string.
  */
-#define RP_LOG_ERR(format, ...)
+#define NRF_RPC_ERR(format, ...)
 
 /**
  * @brief Macro for logging a message with the severity level WRN.
@@ -33,7 +33,7 @@ extern "C" {
  * @param format printf-style format string, optionally followed by arguments
  *               to be formatted and inserted in the resulting string.
  */
-#define RP_LOG_WRN(format, ...)
+#define NRF_RPC_WRN(format, ...)
 
 /**
  * @brief Macro for logging a message with the severity level INF.
@@ -41,7 +41,7 @@ extern "C" {
  * @param format printf-style format string, optionally followed by arguments
  *               to be formatted and inserted in the resulting string.
  */
-#define RP_LOG_INF(format, ...)
+#define NRF_RPC_INF(format, ...)
 
 /**
  * @brief Macro for logging a message with the severity level DBG.
@@ -49,7 +49,7 @@ extern "C" {
  * @param format printf-style format string, optionally followed by arguments
  *               to be formatted and inserted in the resulting string.
  */
-#define RP_LOG_DBG(format, ...)
+#define NRF_RPC_DBG(format, ...)
 
 
 /**
@@ -58,7 +58,7 @@ extern "C" {
  * @param[in] p_memory Pointer to the memory region to be dumped.
  * @param[in] length   Length of the memory region in bytes.
  */
-#define RP_LOG_HEXDUMP_ERR(p_memory, length)
+#define NRF_RPC_DUMP_ERR(p_memory, length)
 
 /**
  * @brief Macro for logging a memory dump with the severity level WRN.
@@ -66,7 +66,7 @@ extern "C" {
  * @param[in] p_memory Pointer to the memory region to be dumped.
  * @param[in] length   Length of the memory region in bytes.
  */
-#define RP_LOG_HEXDUMP_WRN(p_memory, length)
+#define NRF_RPC_DUMP_WRN(p_memory, length)
 
 /**
  * @brief Macro for logging a memory dump with the severity level INF.
@@ -74,7 +74,7 @@ extern "C" {
  * @param[in] p_memory Pointer to the memory region to be dumped.
  * @param[in] length   Length of the memory region in bytes.
  */
-#define RP_LOG_HEXDUMP_INF(p_memory, length)
+#define NRF_RPC_DUMP_INF(p_memory, length)
 
 /**
  * @brief Macro for logging a memory dump with the severity level DBG.
@@ -82,7 +82,7 @@ extern "C" {
  * @param[in] p_memory Pointer to the memory region to be dumped.
  * @param[in] length   Length of the memory region in bytes.
  */
-#define RP_LOG_HEXDUMP_DBG(p_memory, length)
+#define NRF_RPC_DUMP_DBG(p_memory, length)
 
 
 /**
@@ -92,7 +92,7 @@ extern "C" {
  *
  * @return String containing the textual representation of the error code.
  */
-#define RP_LOG_ERROR_STRING_GET(error_code)
+#define NRF_RPC_ERROR_STRING_GET(error_code)
 
 /**
  *@}

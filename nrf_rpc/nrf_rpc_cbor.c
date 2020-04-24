@@ -7,7 +7,7 @@
 #include <rp_trans.h>
 #include <rp_errors.h>
 
-#define RP_LOG_MODULE SER_CORE
+#define NRF_RPC_LOG_MODULE SER_CORE
 #include <rp_log.h>
 
 
@@ -61,7 +61,7 @@ static rp_err_t cmd_execute(struct rp_ser *rp, uint8_t cmd, CborValue *it)
 	if (cmd_handler) {
 		err = cmd_handler(it);
 	} else {
-		RP_LOG_ERR("Unsupported command received");
+		NRF_RPC_ERR("Unsupported command received");
 		err = RP_ERROR_NOT_SUPPORTED;
 	}
 
@@ -84,7 +84,7 @@ static rp_err_t event_parse(struct rp_ser *rp, uint8_t evt, CborValue *it) // DK
 	if (evt_handler) {
 		err = evt_handler(evt, it);
 	} else {
-		RP_LOG_ERR("Unsupported event received");
+		NRF_RPC_ERR("Unsupported event received");
 		err = RP_ERROR_NOT_SUPPORTED;
 	}
 
@@ -174,7 +174,7 @@ static rp_err_t cmd_dispatch(struct rp_ser *rp, const uint8_t *data,
 		return err;
 	}
 
-	RP_LOG_DBG("Received command 0x%02x", cmd);
+	NRF_RPC_DBG("Received command 0x%02x", cmd);
 
 	return RP_SUCCESS;
 }
@@ -216,7 +216,7 @@ static rp_err_t received_data_parse(struct rp_ser *rp,
 			prev_wait_for_ack = rp->waiting_for_ack;
 			rp->waiting_for_ack = false;
 		}
-		RP_LOG_DBG("Command received");
+		NRF_RPC_DBG("Command received");
 		err = cmd_dispatch(rp, &data[index], len);
 		if (USE_EVENT_ACK) {
 			// Resore previous state of waiting for ack
@@ -225,7 +225,7 @@ static rp_err_t received_data_parse(struct rp_ser *rp,
 		break;
 
 	case RP_SER_PACKET_TYPE_EVENT:
-		RP_LOG_DBG("Event received");
+		NRF_RPC_DBG("Event received");
 		err = event_dispatch(rp, &data[index], len);
 		if (USE_EVENT_ACK) {
 			packet_type = RP_SER_PACKET_TYPE_ACK;
@@ -234,7 +234,7 @@ static rp_err_t received_data_parse(struct rp_ser *rp,
 		break;
 
 	default:
-		RP_LOG_ERR("Unknown packet received");
+		NRF_RPC_ERR("Unknown packet received");
 		return RP_ERROR_NOT_SUPPORTED;
 	}
 
