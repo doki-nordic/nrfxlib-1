@@ -23,7 +23,24 @@ choice
 
 config NRF_RPC_TR_RPMSG
 	bool "nRF RPC over RPMsg"
+	help
+	  If enabled selects RPMsg as a transport layer for nRF PRC.
+
+config NRF_RPC_TR_CUSTOM
+	bool "User provided transport layer"
+	help
+	  If enabled selects custom transport layer. User can provide own
+	  implementation of nRF PRC transport layer. In this case
+	  NRF_RPC_TR_CUSTOM_INCLUDE must be provided.
 
 endchoice
+
+config NRF_RPC_TR_CUSTOM_INCLUDE
+	string "User provided include file for transport layer"
+	depends on NRF_RPC_TR_CUSTOM
+	help
+	  If NRF_RPC_TR_CUSTOM is enabled this option specifies the include
+	  file that contains custom transport layer API. Provided API must
+	  be compatible with the template header file "rp_trans_tmpl.h".
 
 endif # NRF_RPC
