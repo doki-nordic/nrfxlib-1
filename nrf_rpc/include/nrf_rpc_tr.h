@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef RP_TRANS_H_
-#define RP_TRANS_H_
+#ifndef NRF_RPC_TR_H_
+#define NRF_RPC_TR_H_
 
 #if defined(CONFIG_NRF_RPC_TR_RPMSG)
 
@@ -21,4 +21,4 @@
 
 #endif
 
-#endif  /* RP_TRANS_H_ */
+#endif  /* NRF_RPC_TR_H_ */

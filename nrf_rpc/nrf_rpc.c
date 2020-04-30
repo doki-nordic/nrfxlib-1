@@ -199,8 +199,11 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 	/* Validate required parameters */
 	NRF_RPC_ASSERT(local_ep != NULL);
 	NRF_RPC_ASSERT(valid_packet(packet));
-	/* Too small packets will be filered out, so it is safe to use assert */
-	NRF_RPC_ASSERT(len >= _NRF_RPC_HEADER_SIZE);
+
+	if (len < _NRF_RPC_HEADER_SIZE) {
+		result = NRF_RPC_ERR_INTERNAL;
+		goto exit_function;
+	}
 
 	/* Parse header */
 	type = packet[0];

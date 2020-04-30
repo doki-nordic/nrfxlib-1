@@ -5,6 +5,9 @@
  */
 
 
+#ifndef _NRF_RPC_H_
+#define _NRF_RPC_H_
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -12,6 +15,18 @@
 #include <nrf_rpc_errors.h>
 #include <nrf_rpc_common.h>
 #include <nrf_rpc_tr.h>
+
+
+/**
+ * @defgroup nrf_rpc nRF RPC (Remote Procedure Calls) module.
+ * @{
+ * @brief Module to call procedures on a remote processor.
+ */
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 /** @brief First id of the nRF RPC group that can be used by the user */
@@ -416,3 +431,13 @@ void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 			   struct nrf_rpc_tr_remote_ep *tr_remote_ep, int code,
 			   bool from_remote);
 
+
+/**
+ * @}
+ */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _NRF_RPC_H_ */

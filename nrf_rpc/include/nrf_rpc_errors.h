@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef RP_ERRORS_H_
-#define RP_ERRORS_H_
+#ifndef NRF_RPC_ERRORS_H_
+#define NRF_RPC_ERRORS_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,4 +28,4 @@ enum nrf_rpc_error_code {
 }
 #endif
 
-#endif /* RP_ERRORS_H_ */
+#endif /* NRF_RPC_ERRORS_H_ */
