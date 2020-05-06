@@ -136,7 +136,8 @@ static int handler_execute(uint8_t id, const uint8_t *packet, size_t len,
 				 const struct nrf_rpc_decoder)) {
 
 		if (id == decoder->id) {
-			err = decoder->handler(packet, len, (void *)decoder);
+			err = decoder->handler(packet, len,
+					       decoder->handler_data);
 			if (err < 0) {
 				NRF_RPC_ERR("Command or event handler "
 					   "returned an error %d", err);
@@ -770,4 +771,16 @@ void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 			   bool from_remote)
 {
 	NRF_RPC_DBG("Empty nrf_rpc_error_handler called");
+}
+
+
+void nrf_rpc_report_error(nrf_rpc_cmd_ctx_t ctx, int err)
+{
+	struct nrf_rpc_tr_local_ep *tr_local_ep;
+	struct nrf_rpc_tr_remote_ep *tr_remote_ep = ctx;
+
+	if (err < 0) {
+		tr_local_ep = nrf_rpc_tr_current_get();
+		report_error(tr_local_ep, tr_remote_ep, err, 0);
+	}
 }

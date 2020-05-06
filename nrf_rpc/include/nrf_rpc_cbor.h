@@ -1,383 +1,303 @@
-/ *
+/*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
  * SPDX-License-Identifier: Apache-2.0
- * /
+ */
 
-#ifndef RP_SER_H_
-#define RP_SER_H_
+
+#ifndef _NRF_RPC_CBOR_H_
+#define _NRF_RPC_CBOR_H_
 
 #include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 #include <cbor.h>
 
-#include <rp_errors.h>
-#include <rp_common.h>
-#include <rp_trans.h>
+#include <nrf_rpc.h>
+#include <nrf_rpc_errors.h>
+#include <nrf_rpc_common.h>
+#include <nrf_rpc_tr.h>
+
 
 /**
- * @file
- * @defgroup rp_ser Remote Procedures Serialization core
+ * @defgroup nrf_rpc nRF RPC (Remote Procedure Calls) module.
  * @{
- * @brief Remote Procedures Serialization core API.
- * /
+ * @brief Module to call procedures on a remote processor.
+ */
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/**@brief Serialization packet type.* /
-enum rp_ser_packet_type { // NEXT: Is it needed in header (we have different API for each type of packet)
-	/** Serialization command packet. * /
-	RP_SER_PACKET_TYPE_CMD          = 0x01,
 
-	/** Serialization event packet. * /
-	RP_SER_PACKET_TYPE_EVENT,
+/** @brief Callback that handles decoding of commands, events and responses.
+ *
+ * @param packet       Packet data.
+ * @param len          Length of the packet.
+ * @param handler_data Custom handler data. In case of commands, events it is a
+ *                     pointer to @a nrf_rpc_decoder structure associated with
+ *                     this command or event. In case of response handler it is
+ *                     an opaque pointer provided to @a NRF_RPC_CMD_SEND.
+ */
+typedef int (*nrf_rpc_cbor_handler_t)(CborValue *value, void *handler_data);
 
-	/** Serialization command response packet. * /
-	RP_SER_PACKET_TYPE_RSP,
-
-	/** Serialization event acknowledge packet. * /
-	RP_SER_PACKET_TYPE_ACK,
-
-	/** Serialization transport reserved packet. * /
-	RP_SER_PACKET_TRANSPORT_RESERVED = 128,
-
-	/** Serialization upper bound. * /
-	RP_SER_PACKER_TYPE_MAX           = 255
+struct nrf_rpc_cbor_cmd_ctx
+{
+	nrf_rpc_cmd_ctx_t base_ctx;
+	CborEncoder encoder;
+	uint8_t *packet;
 };
 
-/**@brief Command and response decoder handler type. * /
-typedef rp_err_t (*cmd_handler_t)(CborValue *it);
-
-/**@brief Event decoder handler type. * /
-typedef rp_err_t (*evt_handler_t)(uint8_t evt, CborValue *it);
-
-/**@brief Encoder buffer structure. * /
-struct rp_ser_buf {
-	/** Encoder buffer. * /
-	uint8_t *buf;
-
-	/** Encoder buffer size. * /
-	size_t size;
-
-	/** Current packet size. * /
-	size_t packet_size;
+struct nrf_rpc_cbor_evt_ctx
+{
+	nrf_rpc_evt_ctx_t base_ctx;
+	CborEncoder encoder;
+	uint8_t *packet;
 };
 
-/**@brief Command decoder structure. * /
-struct rp_ser_cmd {
-	/** Command code. * /
-	uint8_t cmd;
-
-	/** Command decoder. * /
-	cmd_handler_t func;
+struct nrf_rpc_cbor_rsp_ctx
+{
+	nrf_rpc_rsp_ctx_t base_ctx;
+	CborEncoder encoder;
+	uint8_t *packet;
 };
 
-/**@brief Event decoder structure. * /
-struct rp_ser_evt {
-	/** Event code. * /
-	uint8_t evt;
-
-	/** Event decoder. * /
-	evt_handler_t func;
+struct nrf_rpc_cbor_decoder {
+	nrf_rpc_cbor_handler_t handler;
+	void *handler_data;
 };
 
-/**@brief Configuration for Remote Procedure Serialization instance. * /
-struct rp_ser_conf {
-	/** Command section start address. * /
-	const struct rp_ser_cmd *cmd_begin;
+/** @brief Register a command decoder.
+ *
+ * @param _group   Group that the decoder will belong to.
+ * @param _name    Name of the decoder.
+ * @param _cmd     Command id. Can be from 0 to 255.
+ * @param _handler Handler function of type @a nrf_rpc_handler_t.
+ */
+#define NRF_RPC_CBOR_CMD_DECODER(_group, _name, _cmd, _handler, _data)	       \
+	static const struct nrf_rpc_cbor_decoder NRF_RPC_CONCAT(_name, _cbor_data) = {    \
+		.handler = _handler, \
+		.handler_data = _data, \
+	}; \
+	NRF_RPC_CMD_DECODER(_group, _name, _cmd, _nrf_rpc_cbor_proxy_handler, \
+			    (void *)&NRF_RPC_CONCAT(_name, _cbor_data))
 
-	/** Command section end address. * /
-	const struct rp_ser_cmd *cmd_end;
 
-	/** Event section start address. * /
-	const struct rp_ser_evt *evt_begin;
+/** @brief Register an event decoder.
+ *
+ * @param _group   Group that the decoder will belong to.
+ * @param _name    Name of the decoder.
+ * @param _evt     Event id. Can be from 0 to 255.
+ * @param _handler Handler function of type @a nrf_rpc_handler_t.
+ */
+#define NRF_RPC_CBOR_EVT_DECODER(_group, _name, _evt, _handler, _data)	       \
+	static const struct nrf_rpc_cbor_decoder NRF_RPC_CONCAT(_name, _cbor_data) = {    \
+		.handler = _handler, \
+		.handler_data = _data, \
+	}; \
+	NRF_RPC_EVT_DECODER(_group, _name, _evt, _nrf_rpc_cbor_proxy_handler, \
+			    (void *)&NRF_RPC_CONCAT(_name, _cbor_data))
 
-	/** Event section end address. * /
-	const struct rp_ser_evt *evt_end;
+/** @brief Allocates resources for a new command.
+ *
+ * Macro may allocate some variables on stack, so it should be used at top level
+ * of a function.
+ *
+ * @param      _group  Group that command belongs to.
+ * @param[out] _ctx    Variable of type `nrf_rpc_cmd_ctx_t` that will hold
+ *                     allocated resources.
+ * @param[out] _packet Variable of type `CborEncoder *` that will hold pointer to
+ *                     newly allocated packet buffer.
+ * @param      _len    Requested length of the packet.
+ * @param __VA_ARGS__  Code that will be executed in case of allocation failure.
+ *                     This can be e.g. return or goto statement.
+ */
+#define NRF_RPC_CBOR_CMD_ALLOC(_ctx, _group, _packet, _len, ...)	       \
+	NRF_RPC_CMD_ALLOC(_ctx.base_ctx, _group, _ctx.packet, _len, __VA_ARGS__);\
+	_packet = &_ctx.encoder; \
+	cbor_encoder_init(_packet, _ctx.packet, _len, 0)
 
-	/** Endpoint number. * /
-	int ep_number;
-};
 
-/**@brief Helper macro for creating command decoder. All comands decoders have to be assigned
- *        to proper Remote Procedure Serialization instance. After receiving a command, the
- *        command decoder function is searching in command data memory section based on command
- *        number and calls the actual decoder.
+/** @brief Discards resources allocated for a new command.
  *
- * @param[in] _rp_inst Remote Procedure Serialization instance.
- * @param[in] _name Command decoder name.
- * @param[in] _cmd Command number.
- * @param[in] _handler Command decoder function @ref cmd_handler_t.
- * /
-#define RP_SER_CMD_DECODER(_rp_inst, _name, _cmd, _handler)         \
-	NRF_RPC_STATIC_ASSERT(_cmd <= 0xFF, "Command out of range");     \
-	const struct rp_ser_cmd NRF_RPC_CONCAT(_name, _cmd_dec) __used   \
-	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder) \
-				   "." "cmd"                        \
-				   "." NRF_RPC_STRINGIFY(_rp_inst)       \
-				   "." NRF_RPC_STRINGIFY(_name)))) = {   \
-		.cmd = _cmd,					    \
-		.func = _handler				    \
-	}
+ * This macro should be used if a command was allocated, but it will not be send
+ * with @a NRF_RPC_CMD_SEND.
+ *
+ * @param _ctx    Context that was previously allocated to send the command.
+ * @param _packet Packet that was previously allocated to send the command.
+ */
+#define NRF_RPC_CBOR_CMD_DISCARD(_ctx, _packet)				       \
+	NRF_RPC_CMD_DISCARD(_ctx.base_ctx, _packet)
 
-/**@brief Helper macro for creating event decoder. All events decoders have to be assigned
- *        to proper Remote Procedure Serialization instance. After receiving a event the
- *        event decoder function is searching in command data memory section based on command
- *        number and called.
- *
- * @param[in] _rp_inst Remote Procedure Serialization instance.
- * @param[in] _name Event decoder name.
- * @param[in] _cmd Event number.
- * @param[in] _handler Event decoder function @ref cmd_handler_t.
- * /
-#define RP_SER_EVT_DECODER(_rp_inst, _name, _evt, _handler)         \
-	NRF_RPC_STATIC_ASSERT(_evt <= 0xFF, "Event out of range");       \
-	const struct rp_ser_evt NRF_RPC_CONCAT(_name, _evt_dec) __used   \
-	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder) \
-				   "." "evt"                        \
-				   "." NRF_RPC_STRINGIFY(_rp_inst)       \
-				   "." NRF_RPC_STRINGIFY(_name)))) = {   \
-		.evt = _evt                                         \
-		.func = _handler			            \
-	}
 
-/**@brief Remote Procedure Serialization instance. * /
-struct rp_ser {
-	/** Transport endpoint instance. * /
-	struct rp_trans_endpoint endpoint;
+/** @brief Allocates resources for a new event.
+ *
+ * Macro may allocate some variables on stack, so it should be used at top level
+ * of a function.
+ *
+ * @param      _group  Group that event belongs to.
+ * @param[out] _ctx    Variable of type `nrf_rpc_evt_ctx_t` that will hold
+ *                     allocated resources.
+ * @param[out] _packet Variable of type `uint8_t *` that will hold pointer to
+ *                     newly allocated packet buffer.
+ * @param      _len    Requested length of the packet.
+ * @param __VA_ARGS__  Code that will be executed in case of allocation failure.
+ *                     This can be e.g. return or goto statement.
+ */
+#define NRF_RPC_CBOR_EVT_ALLOC(_ctx, _group, _packet, _len, ...)	       \
+	NRF_RPC_EVT_ALLOC(_ctx.base_ctx, _group, _ctx.packet, _len, __VA_ARGS__);\
+	_packet = &_ctx.encoder; \
+	cbor_encoder_init(_packet, _ctx.packet, _len, 0)
 
-	/** Configuration of this instance including decoders addresses. * /
-	const struct rp_ser_conf *conf;
 
-	/** Current processing command response decoder. * /
-	cmd_handler_t rsp_handler;
+/** @brief Discards resources allocated for a new event.
+ *
+ * This macro should be used if an event was allocated, but it will not be send
+ * with @a NRF_RPC_EVT_SEND.
+ *
+ * @param _ctx    Context that was previously allocated to send the event.
+ * @param _packet Packet that was previously allocated to send the event.
+ */
+#define NRF_RPC_CBOR_EVT_DISCARD(_ctx, _packet)				       \
+	NRF_RPC_EVT_DISCARD(_ctx.base_ctx, _packet)
 
-	// DKTODO: Comment
-	bool waiting_for_ack;
-};
 
-/**@brief Macro for defining the Remote Procedure Serialization instance.
+/** @brief Allocates resources for a response.
  *
- * @param[in] _name Instance name.
- * @param[in] _endpoint_num Endpoint number, used for transport endpoint identification.
- * @param[in] _endpoint_stack_size Endpoint thread stack size.
- * @param[in] _endpoint_thread_prio Endpoint thread priority.
- * /
-#define RP_SER_DEFINE(_name, _endpoint_num, _endpoint_stack_size,                 \
-                      _endpoint_thread_prio)                                      \
-	/* Helper variables used to specify start and end addresses of specific   \
-	 * subsection instance event and command decoders data. The section must  \
-	 * be sorted in alphabetical order to ensure the valid value.             \
-	 * /                                                                       \
-	const struct rp_ser_cmd NRF_RPC_CONCAT(_name, _cmd_begin) __used               \
-	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder)               \
-				   "." "cmd" "." NRF_RPC_STRINGIFY(_name) ".")));      \
-		const struct rp_ser_cmd NRF_RPC_CONCAT(_name, _cmd_end) __used         \
-	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder)               \
-				   "." "cmd" "." NRF_RPC_STRINGIFY(_name) "." "}")));  \
-		const struct rp_ser_evt NRF_RPC_CONCAT(_name, _evt_begin) __used       \
-	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder)               \
-				   "." "evt" "." NRF_RPC_STRINGIFY(_name) ".")));      \
-		const struct rp_ser_evt NRF_RPC_CONCAT(_name, _evt_end) __used         \
-	__attribute__((__section__("." NRF_RPC_STRINGIFY(rp_ser_decoder)               \
-				   "." "evt" "." NRF_RPC_STRINGIFY(_name) "." "}")));  \
-										  \
-	RP_TRANS_ENDPOINT_PREPARE(NRF_RPC_CONCAT(_name, _ep),                          \
-					    _endpoint_stack_size,                 \
-					    _endpoint_thread_prio);               \
-										  \
-	static const struct rp_ser_conf NRF_RPC_CONCAT(_name, _conf) = {		  \
-		.cmd_begin = (&NRF_RPC_CONCAT(_name, _cmd_begin) + 1),		  \
-		.cmd_end = &NRF_RPC_CONCAT(_name, _cmd_end),			          \
-		.evt_begin = (&NRF_RPC_CONCAT(_name, _evt_begin) + 1),		  \
-		.evt_end = &NRF_RPC_CONCAT(_name, _evt_end),				  \
-		.ep_number = _endpoint_num,					  \
-	};									  \
-										  \
-	struct rp_ser _name = {							  \
-		.endpoint = RP_TRANS_ENDPOINT_INITIALIZER(NRF_RPC_CONCAT(_name, _ep)), \
-		.conf = &NRF_RPC_CONCAT(_name, _conf),				  \
-	}
+ * Macro may allocate some variables on stack, so it should be used at top level
+ * of a function.
+ *
+ * @param[out] _ctx    Variable of type `nrf_rpc_rsp_ctx_t` that will hold
+ *                     allocated resources.
+ * @param[out] _packet Variable of type `uint8_t *` that will hold pointer to
+ *                     newly allocated packet buffer.
+ * @param      _len    Requested length of the packet.
+ * @param __VA_ARGS__  Code that will be executed in case of allocation failure.
+ *                     This can be e.g. return or goto statement.
+ */
+#define NRF_RPC_CBOR_RSP_ALLOC(_ctx, _packet, _len, ...)	       \
+	NRF_RPC_RSP_ALLOC(_ctx.base_ctx, _ctx.packet, _len, __VA_ARGS__);\
+	_packet = &_ctx.encoder; \
+	cbor_encoder_init(_packet, _ctx.packet, _len, 0)
 
-/**@brief Macro for declaring a serialization instance (not creating it)
- *
- * Serialization which are split up over multiple files must have exactly
- * one file use @ref RP_SER_DEFINE to create module-specific state
- * and register the decoders data section.
- *
- * The other serialization files which could share the same instance should
- * use this macro instead to creating the new one.
- *
- * @param[in] _name Exiting instance name.
- * /
-#define RP_SER_DECLARE(_name) \
-	extern struct rp_ser _name
 
-/**@brief Function for initializing the Remote Procedure Serialization instance.
+/** @brief Discards resources allocated for a response.
  *
- * This function initializes Remote Procedure Serialization instance, and creates a new
- * tranport endpoint for it. Multiple instances can be initialized during runtime. This ensures
- * parallel remote function calls.
+ * This macro should be used if an response was allocated, but it will not be
+ * send with @a NRF_RPC_RSP_SEND.
  *
- * @param[in] rp Remote procedure instance.
- *
- * @retval RP_SUCCESS Initialization was successful.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * /
-rp_err_t rp_ser_init(struct rp_ser *rp);
+ * @param _ctx    Context that was previously allocated to send the response.
+ * @param _packet Packet that was previously allocated to send the response.
+ */
+#define NRF_RPC_CBOR_RSP_DISCARD(_ctx, _packet)				       \
+	NRF_RPC_RSP_DISCARD(_ctx.base_ctx, _packet)
 
-/**@brief Function for sending command(function call) to the Remote processor.
- *
- * This function sends a procedure call to the remote processor and waits for response
- * * a specified amount of time if rsp is not NULL. After receiving command response
- * the response decoder is called and received data can be returned.
- *
- * @param[in] rp Remote Procedure Serialization instance.
- * @param[in] encoder Remote Procedure instance encoder.
- * @param[in] rsp Command response decoder. If not NULL, function waits for response and
- *                decodes it using this handler.
- *
- * @retval RP_SUCCESS Command send was successful.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * @retval RP_ERROR_INVALID_PARAM A serialization packet length was 0.
- * /
-rp_err_t rp_ser_cmd_send(struct rp_ser *rp,
-			 struct rp_ser_buf *rp_buf,
-			 CborEncoder *encoder,
-			 cmd_handler_t rsp);
+int _nrf_rpc_cbor_proxy_handler(const uint8_t *packet, size_t len, void *handler_data);
 
-/**@brief Function for sending event to the Remote processor.
+/** @brief Send a command.
  *
- * This function sends an event to the remote processor. Event is asynchronous and
- * receiving it is not confirmed by the Remote processor. Event can be used in case
- * when remote function call doesn't return any data or the remote processor gets an
- * event which should be transported to the local processor it is needed to pass it
- * to other processor.
- *
- * @param[in] rp Remote Procedure Serialization instance.
- * @param[in] encoder Event encoder.
- *
- * @retval RP_SUCCESS Command send was successful.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * @retval RP_ERROR_INVALID_PARAM A serialization packet length was 0.
- * /
-rp_err_t rp_ser_evt_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
-			 CborEncoder *encoder);
+ * @param remote_ep    Destination endpoint allocated by @a NRF_RPC_CMD_ALLOC.
+ * @param cmd          Command id.
+ * @param packet       Packet allocated by @a NRF_RPC_CMD_ALLOC and filled with
+ *                     encoded data.
+ * @param len          Length of the packet. Can be smaller than allocated.
+ * @param handler      Callback that handles the response. In case of error
+ *                     it is undefined if the handler will be called.
+ * @param handler_data Opaque pointer that will be passed to @a handler.
+ * @returns            NRF_RPC_SUCCESS or error code from
+ *                     enum nrf_rpc_error_code.
+ */
+int nrf_rpc_cbor_cmd_send(struct nrf_rpc_cbor_cmd_ctx *ctx, uint8_t cmd, nrf_rpc_cbor_handler_t handler, void *handler_data);
 
-/**@brief Function for sending command response to the Remote processor.
- *
- * This function sends response after the received command was processed.
- *
- * @param[in] rp Remote Procedure Serialization instance.
- * @param[in] encoder Response encoder.
- *
- * @retval RP_SUCCESS Command send was successfull.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * @retval RP_ERROR_INVALID_PARAM A serialization packet length was 0.
- * /
-rp_err_t rp_ser_rsp_send(struct rp_ser *rp, struct rp_ser_buf *rp_buf,
-			 CborEncoder *encoder);
 
-/**@brief Function for initializing the Remote procedure command packet.
+/** @brief Send a command and get response directly.
  *
- * This function initializes the command packet. Should be used
- * after allocation of the buffer for encoding the Remote procedure.
- * It creates the packet header data in provided buffer and initializes
- * serializator.
+ * After successful return caller is resposible for decoding content of the
+ * response packet an call @a nrf_rpc_decoding_done just after that. After
+ * calling @a nrf_rpc_decoding_done @a rsp_packet is no longer valid.
  *
- * @note Command packet needs three bytes from rp_buf for its
- *       internal data.
+ * Depending on transport layer implementation this function may be slightly
+ * slower than @a nrf_rpc_cmd_send, because additional thread context switching
+ * may happen.
  *
- * @param[in, out] rp_buf Remote Procedure buffer
- * @param[in, out] encoder Remote Procedure TinyCBOR encoder data.
- * @param[in] cmd Command number.
- *
- * @retval RP_SUCCESS The Remote Procedure initialization was successful.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * @retval RP_ERROR_NO_MEMORY Too small buffer. Packet header data cannot be encoded.
- * /
-rp_err_t rp_ser_cmd_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder,
-			 uint8_t cmd);
+ * @param remote_ep       Destination endpoint allocated @a NRF_RPC_CMD_ALLOC.
+ * @param cmd             Command id.
+ * @param packet          Packet allocated by @a NRF_RPC_CMD_ALLOC and filled
+ *                        with encoded data.
+ * @param len             Length of the packet. Can be smaller than allocated.
+ * @param[out] rsp_packet Response packet.
+ * @param[out] rsp_len    Response packet length.
+ * @returns               NRF_RPC_SUCCESS or error code from
+ *                        enum nrf_rpc_error_code.
+ */
+int nrf_rpc_cbor_cmd_rsp_send(struct nrf_rpc_cbor_cmd_ctx *ctx, uint8_t cmd, CborParser *parser, CborValue *rsp_packet);
 
-/**@brief Function for initializing the Remote procedure event packet.
- *
- * This function initializes the event packet. Should be used
- * after allocation of the buffer for encoding the Remote procedure.
- * It creates the packet header data in provided buffer and initializes
- * serializator.
- *
- * @note Event packet needs three bytes from rp_buf for its
- *       internal data.
- *
- * @param[in, out] rp_buf Remote Procedure buffer
- * @param[in, out] encoder Remote Procedure TinyCBOR encoder data.
- * @param[in] evt Event number.
- *
- * @retval RP_SUCCESS The Remote Procedure initialization was successful.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * @retval RP_ERROR_NO_MEMORY Too small buffer. Packet header data cannot be encoded.
- * /
-rp_err_t rp_ser_evt_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder,
-			 uint8_t evt);
 
-/**@brief Function for initializing the Remote procedure response packet.
+/** @brief Send a command passing any errors to an error handler.
  *
- * This function initializes the response packet. Should be used
- * after allocation of the buffer for encoding the Remote procedure.
- * It creates the packet header data in provided buffer and initializes
- * serializator.
+ * If error occurred during sending this command it will be passed to
+ * @a nrf_rpc_error_handler instead of returning it. This form of error handling
+ * can be useful for serializing API function that has no ability to report
+ * an error in any other way, e.g. it returns void.
  *
- * @note Response packet needs two bytes from rp_buf for its
- *       internal data.
- *
- * @param[in, out] rp_buf Remote Procedure buffer
- * @param[in, out] encoder Remote Procedure TinyCBOR encoder data.
- *
- * @retval RP_SUCCESS The Remote Procedure initialization was successful.
- * @retval RP_ERROR_NULL A parameter was NULL.
- * @retval RP_ERROR_NO_MEMORY Too small buffer. Packet header data cannot be encoded.
- * /
-rp_err_t rp_ser_rsp_init(struct rp_ser_buf *rp_buf, CborEncoder *encoder);
+ * See @a nrf_rpc_cmd_send for more details.
+ */
+void nrf_rpc_cbor_cmd_send_noerr(struct  nrf_rpc_cbor_cmd_ctx *ctx, uint8_t cmd, nrf_rpc_cbor_handler_t handler,
+			    void *handler_data);
 
-void rp_ser_decode_done(struct rp_ser *rp);
 
-/**@brief Define the rp_ser_buf stack variable and allocate Remote Procedure
- *        buffer. Every remote procedure needs to alloc the buffer for
- *        encoded data.
+/** @brief Send an event.
  *
- * @param[in] rp The Remote Procedure serialization instance.
- * @param[in, out] encoder Remote Procedure encoder data.
- * @param[in, out] size Requested buffer size as input, allocated buffer size as output.
+ * Sending an event always allocates a new thread from thread pool to handler
+ * it, so it should be done carefully. Seding to many events at once may
+ * consume all remote thread and as the result block other remote calls.
  *
- * /
-#define rp_ser_buf_alloc(_rp_buf_name, _rp, _size)			              \
-	uint8_t *NRF_RPC_CONCAT(_rp_buf_name, _buf);                                       \
-	rp_trans_alloc_tx_buf(&_rp.endpoint, &NRF_RPC_CONCAT(_rp_buf_name, _buf), &_size); \
-	struct rp_ser_buf _rp_buf_name = {                                            \
-		.buf = NRF_RPC_CONCAT(_rp_buf_name, _buf),                                 \
-		.size = _size,                                                        \
-		.packet_size = 0                                                      \
-	}
+ * @param remote_ep Destination endpoint allocated by @a NRF_RPC_ENT_ALLOC.
+ * @param evt       Event id.
+ * @param packet    Packet allocated by @a NRF_RPC_ENT_ALLOC and filled with
+ *                  encoded data.
+ * @param len       Length of the packet. Can be smaller than allocated.
+ * @returns         NRF_RPC_SUCCESS or error code from enum nrf_rpc_error_code.
+ */
+int nrf_rpc_cbor_evt_send(struct nrf_rpc_cbor_evt_ctx *ctx, uint8_t evt);
 
-/**@brief Macro for releasing the allocated buffer.
- *        It can be used in case of error in the Remote Procedure Serialization.
+
+/** @brief Send an event passing any errors to an error handler.
  *
- * @param[in] rp The Remote Procedure Serialization instance.
- * @param[in] buf Pointer to currently used buffer.
- * /
-#define rp_ser_buf_free(rp, rp_buf) \
-	rp_trans_free_tx_buf(rp.endpoint, rp_buf.buf)
+ * If error occurred during sending this event it will be passed to
+ * @a nrf_rpc_error_handler instead of returning it. This form of error handling
+ * can be useful for serializing API function that has no ability to report
+ * an error in any other way, e.g. it returns void.
+ *
+ * See @a nrf_rpc_evt_send for more details.
+ */
+void nrf_rpc_cbor_evt_send_noerr(struct nrf_rpc_cbor_evt_ctx *ctx, uint8_t evt);
+
+
+/** @brief Send a response to a command.
+ *
+ * There is no _noerr form of this function, because it is always called from
+ * command decoder, so the error code returned by @a nrf_rpc_rsp_send can
+ * be passed further and returned from command decoder. Error returned from
+ * commands decoders always go to @a nrf_rpc_error_handler.
+ *
+ * @param remote_ep Destination endpoint allocated by @a NRF_RPC_RSP_ALLOC.
+ * @param packet    Packet allocated by @a NRF_RPC_RSP_ALLOC and filled with
+ *                  encoded data.
+ * @param len       Length of the packet. Can be smaller than allocated.
+ * @returns         NRF_RPC_SUCCESS or error code from enum nrf_rpc_error_code.
+ */
+int nrf_rpc_cbor_rsp_send(struct nrf_rpc_cbor_rsp_ctx *ctx);
+
+
+/**
+ * @}
+ */
 
 #ifdef __cplusplus
 }
 #endif
 
-/**
- *@}
- * /
-
-#endif /* RP
- * @brief Remote procedures OS specific API_SER_H_ * /
-*/
+#endif /* _NRF_RPC_CBOR_H_ */

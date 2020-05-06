@@ -61,6 +61,9 @@ struct nrf_rpc_decoder {
 
 	/** @brief Command or event decoder. */
 	nrf_rpc_handler_t handler;
+
+	/** @brief Command or event data for decoder. */
+	void *handler_data;
 };
 
 
@@ -137,7 +140,7 @@ typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_rsp_ctx_t;
  * @param _cmd     Command id. Can be from 0 to 255.
  * @param _handler Handler function of type @a nrf_rpc_handler_t.
  */
-#define NRF_RPC_CMD_DECODER(_group, _name, _cmd, _handler)		       \
+#define NRF_RPC_CMD_DECODER(_group, _name, _cmd, _handler, _data)	       \
 	NRF_RPC_STATIC_ASSERT(_cmd <= 0xFE, "Command out of range");	       \
 	NRF_RPC_AUTO_ARR_ITEM(const struct nrf_rpc_decoder,		       \
 			       NRF_RPC_CONCAT(_name, _cmd_dec),		       \
@@ -145,6 +148,7 @@ typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_rsp_ctx_t;
 			       NRF_RPC_STRINGIFY(_name)) = {		       \
 		.id = _cmd,						       \
 		.handler = _handler,					       \
+		.handler_data = _data,					       \
 	};
 
 
@@ -155,7 +159,7 @@ typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_rsp_ctx_t;
  * @param _evt     Event id. Can be from 0 to 255.
  * @param _handler Handler function of type @a nrf_rpc_handler_t.
  */
-#define NRF_RPC_EVT_DECODER(_group, _name, _evt, _handler)		       \
+#define NRF_RPC_EVT_DECODER(_group, _name, _evt, _handler, _data)	       \
 	NRF_RPC_STATIC_ASSERT(_evt <= 0xFE, "Event out of range");	       \
 	NRF_RPC_AUTO_ARR_ITEM(const struct nrf_rpc_decoder,		       \
 			       NRF_RPC_CONCAT(_name, _evt_dec),		       \
@@ -163,6 +167,7 @@ typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_rsp_ctx_t;
 			       NRF_RPC_STRINGIFY(_name)) = {		       \
 		.id = _evt,						       \
 		.handler = _handler,					       \
+		.handler_data = _data,					       \
 	};
 
 
@@ -431,6 +436,8 @@ void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 			   struct nrf_rpc_tr_remote_ep *tr_remote_ep, int code,
 			   bool from_remote);
 
+
+void nrf_rpc_report_error(nrf_rpc_cmd_ctx_t ctx, int code);
 
 /**
  * @}
