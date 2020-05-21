@@ -20,8 +20,8 @@ Additional layer of the API is added that uses `TinyCBOR <https://intel.github.i
    :caption: Contents:
 
    doc/architecture
+   doc/usage
    doc/transport
-   doc/porting
 
 API documentation
 =================
