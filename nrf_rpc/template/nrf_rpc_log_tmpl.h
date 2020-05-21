@@ -19,6 +19,8 @@
 /**
  * @defgroup nrf_rpc_log Logging functionality for nRF PRC
  * @{
+ * @ingroup nrf_rpc
+ *
  * @brief Logging functionality for nRF PRC
  */
 

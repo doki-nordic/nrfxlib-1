@@ -14,7 +14,9 @@ extern "C" {
 /**
  * @defgroup nrf_rpc_common Common nRF RPC utility
  * @{
- * @brief Common utility macros used in nRF RPC.
+ * @ingroup nrf_rpc
+ * 
+ * @brief Common utility macros used internally in nRF RPC.
  */
 
 /** @brief Internal macro used by @ref NRF_RPC_CONCAT to perform the expansion

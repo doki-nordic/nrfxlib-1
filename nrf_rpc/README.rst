@@ -1,20 +1,19 @@
-.. _serialization:
+.. _nrf_rpc:
 
-Remote Procedure Serialization library
-######################################
+nRF_RPC (Remote Procedure Calls) library
+########################################
 
-The Remote Procedure Serialization library is RTOS-agnostic serialization library for Nordic Semicoductor SoCs.
+The nRF_RPC is a remote procedure calls library for for Nordic Semicoductor SoCs.
+RTOS-agnostic serialization library .
 
-The Remote Procedure Serialization module provides an possibility to calling function
-on the Remote processors and receiving an asynchronous events from it.
+The nRF_RPC library provides a possibility to call a function on the remote processors in both synchronous and asynchronous way.
 
-The remote processor could be a separate device of any type (including e.g. a PC), or another core on the same system.
+Depending on the transport layer the remote processor is not limited to a single device. It also could be a separate device of any type (including e.g. a PC), or another core on the same system.
 
-The Remote Procedure Serialization libraries simplify the serialization of user API such as Bluetooth stack and executing it on a remote CPU.
-The libraries are operating system independent so it can be used with default operating system or bare-metal application
-after porting it.
+The nRF_RPC library simplify the serialization of user API such as Bluetooth stack and executing it on a remote CPU.
+The library is operating system independent so it can be used with any operating system after porting just a transport layer of the library.
 
-The module uses `TinyCBOR <https://intel.github.io/tinycbor/current/>`_ library as serializator.
+Additional layer of the API is added that uses `TinyCBOR <https://intel.github.io/tinycbor/current/>`_ library as serialization.
 
 .. toctree::
    :maxdepth: 2
@@ -22,12 +21,11 @@ The module uses `TinyCBOR <https://intel.github.io/tinycbor/current/>`_ library 
 
    doc/architecture
    doc/transport
-   doc/parallel_remote_procedure
    doc/porting
 
 API documentation
 =================
 
-.. doxygengroup:: rp_ser
+.. doxygengroup:: nrf_rpc
    :project: nrfxlib
    :members:

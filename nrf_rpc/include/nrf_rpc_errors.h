@@ -11,6 +11,14 @@
 extern "C" {
 #endif
 
+/**
+ * @defgroup nrf_rpc_errors Error codes for nRF RPC
+ * @{
+ * @ingroup nrf_rpc
+ * 
+ * @brief Error codes for nRF RPC.
+ */
+
 enum nrf_rpc_error_code {
 	NRF_RPC_SUCCESS            = 0,
 	NRF_RPC_ERR_NO_MEM         = -1,
@@ -20,9 +28,12 @@ enum nrf_rpc_error_code {
 	NRF_RPC_ERR_INTERNAL       = -5,
 	NRF_RPC_ERR_OS_ERROR       = -6,
 	NRF_RPC_ERR_INVALID_STATE  = -7,
-	NRF_RPC_ERR_BUSY           = -8,
-	NRF_RPC_ERR_REMOTE         = -9,
+	NRF_RPC_ERR_REMOTE         = -8,
 };
+
+/**
+ * @}
+ */
 
 #ifdef __cplusplus
 }

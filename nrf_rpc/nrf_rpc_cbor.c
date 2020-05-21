@@ -16,8 +16,8 @@ int _nrf_rpc_cbor_proxy_handler(const uint8_t *packet, size_t len, void *handler
 {
 	CborParser parser;
 	CborValue value;
-	struct nrf_rpc_cbor_decoder *cbor_handler =
-		(struct nrf_rpc_cbor_decoder *)handler_data;
+	struct _nrf_rpc_cbor_decoder *cbor_handler =
+		(struct _nrf_rpc_cbor_decoder *)handler_data;
 
 	if (cbor_parser_init(packet, len, 0, &parser, &value) != CborNoError)
 	{
@@ -29,10 +29,10 @@ int _nrf_rpc_cbor_proxy_handler(const uint8_t *packet, size_t len, void *handler
 }
 
 
-int nrf_rpc_cbor_cmd_send(struct nrf_rpc_cbor_cmd_ctx *ctx, uint8_t cmd, nrf_rpc_cbor_handler_t handler, void *handler_data)
+int nrf_rpc_cbor_cmd_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t cmd, nrf_rpc_cbor_handler_t handler, void *handler_data)
 {
 	size_t len;
-	const struct nrf_rpc_cbor_decoder cbor_handler = {
+	const struct _nrf_rpc_cbor_decoder cbor_handler = {
 		.handler = handler,
 		.handler_data = handler_data,
 	};
@@ -56,7 +56,7 @@ cbor_error_exit:
 	return NRF_RPC_ERR_NO_MEM;
 }
 
-int nrf_rpc_cbor_cmd_rsp_send(struct nrf_rpc_cbor_cmd_ctx *ctx, uint8_t cmd, CborParser *parser, CborValue *rsp_packet)
+int nrf_rpc_cbor_cmd_rsp_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t cmd, CborParser *parser, CborValue *rsp_packet)
 {
 	int err;
 	size_t len;
@@ -92,7 +92,7 @@ encoder_error_exit:
 	return NRF_RPC_ERR_NO_MEM;
 }
 
-void nrf_rpc_cbor_cmd_send_noerr(struct  nrf_rpc_cbor_cmd_ctx *ctx, uint8_t cmd, nrf_rpc_cbor_handler_t handler,
+void nrf_rpc_cbor_cmd_send_noerr(struct  nrf_rpc_cbor_alloc_ctx *ctx, uint8_t cmd, nrf_rpc_cbor_handler_t handler,
 			    void *handler_data)
 {
 	int err;
@@ -105,7 +105,7 @@ void nrf_rpc_cbor_cmd_send_noerr(struct  nrf_rpc_cbor_cmd_ctx *ctx, uint8_t cmd,
 	}
 }
 
-int nrf_rpc_cbor_evt_send(struct nrf_rpc_cbor_evt_ctx *ctx, uint8_t evt)
+int nrf_rpc_cbor_evt_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t evt)
 {
 	size_t len;
 
@@ -126,7 +126,7 @@ cbor_error_exit:
 	return NRF_RPC_ERR_NO_MEM;
 }
 
-void nrf_rpc_cbor_evt_send_noerr(struct nrf_rpc_cbor_evt_ctx *ctx, uint8_t evt)
+void nrf_rpc_cbor_evt_send_noerr(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t evt)
 {
 	int err;
 
@@ -138,7 +138,7 @@ void nrf_rpc_cbor_evt_send_noerr(struct nrf_rpc_cbor_evt_ctx *ctx, uint8_t evt)
 	}
 }
 
-int nrf_rpc_cbor_rsp_send(struct nrf_rpc_cbor_rsp_ctx *ctx)
+int nrf_rpc_cbor_rsp_send(struct nrf_rpc_cbor_alloc_ctx *ctx)
 {
 	size_t len;
 

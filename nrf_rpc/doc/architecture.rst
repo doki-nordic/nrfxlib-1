@@ -3,185 +3,224 @@
 Architecture
 ############
 
-The following picture gives an overview of the serialization architecture:
+The following picture gives an overview of the nRF_RPC architecture:
 
-.. image:: img/serialization.png
-   :alt: General serialization architecture
+.. image:: img/layers.svg
+   :alt: nRF_RPC Architecture Layers
    :align: center
 
-Packet format
-=============
 
-The following figure presents the general format of serialized packet:
+Types of communication
+======================
 
-.. image:: img/data_packet.png
-   :alt: Serialization packet format
+Calls can be done in one of two ways: using a command/response or an event.
+
+**Command and response** are intended to be used for a synchronous function calls.
+The caller sends the command to the other side and waits for a response.
+The response is send after end of execution of the a remote function.
+Following image shows an example of the command and response flow.
+
+.. image:: img/cmd_flow.svg
+   :alt: nRF_RPC Command/Response flow
    :align: center
 
-.. list-table:: Packet data overview
-   :header-rows: 1
-
-   * - Packet Type
-     - Description
-   * - 0x01
-     - Command packet, sends to remote processor,
-       where it is decoded and the corresponding function is executed
-   * - 0x02
-     - Event packet, if event is triggered in the remote processor,
-       an event packets can be sent to the other processor
-   * - 0x03
-     - Response packet, after function in the remote processor is called,
-       the response is encoded and send to the calling processor
-
-
-Command (function call)
-=======================
-
-The following figure presents the flow of command and response packets in a serialized application:
-
-.. image:: img/function_ser.png
-   :alt: Command execution
+**Events** are intended to be used for an asynchronous function calls.
+The caller sends an event to the other side and returns immediately if there is free thread in thread pool, otherwise it waits for available thread.
+It is not possible to return anything from the remote side, but it is possible to send another event in opposite direction.
+Following image shows an example of the event flow.
+ 
+.. image:: img/evt_flow.svg
+   :alt: nRF_RPC Event flow
    :align: center
 
-Events
-======
 
-The fallowing figure presents the flow of event packets in a serialized application:
+Threads
+======================
+When a remote procedure call arrived it must be executed in context of some thread.
+For this reason each side of the nRF_PRC contains a thread pool.
+It is OS-dependent, so it is handled by the transport layer.
+Number of thread in the thread pool is configurable.
 
-.. image:: img/event_ser.png
-   :alt: Event execution
+When a caller wants to call a remote procedure the nRF_RPC reserves a thread on the remote thread pool and sends a packet to it.
+If there is no free thread in the pool then it waits until it will be available.
+Response is send directly to a waiting thread, so no new thread is allocated for a response.
+
+Sample command/response diagrams are on the image below.
+
+.. image:: img/cmd_simple.svg
+   :alt: nRF_RPC Simple Command flow
    :align: center
+
+Thread waiting for a response may be reused to receive a new incoming commands from the remote thread that local thread is waiting for, e.g. when callback is called synchronously. Below diagram show that situation.
+
+.. image:: img/cmd_recursive.svg
+   :alt: nRF_RPC Simple Command flow
+   :align: center
+
+Event always reserve a new thread from remote thread pool.
+It is dangerous to send a lot of events one after another, because each event will reserves a new thread, so the thread pool may be consumed entirety.
+Sample events are shown on below diagram.
+
+.. image:: img/evt_simple.svg
+   :alt: nRF_RPC Simple Command flow
+   :align: center
+
 
 Command and event encoders/decoders
 ===================================
 
-Module contains an API which helps user to create it own function, event and function response decoders and encoders.
-Command and event decoders are placed in special memory section and should be register using macros: :c:macro:`RP_SER_CMD_DECODER` for command and :c:macro:`RP_SER_EVT_DECODER` for event.
-One Remote Procedure Serialization Instance can register up to 255 command and event decoders.
+Specific API can be used remotely if encoders/decoders are provided for it.
+One one side there are encoders that encodes parameters and sends a commands or events. On the other side there are decoders that decodes and executes specific procedure.
+
+Main goal of the nRF_RPC API is to allow creation of encoders/decoders.
+
+Encoders and decoders are grouped.
+Each group contains functions related to a single API, e.g. Bluetooth, entropy, e.t.c.
+Group is created with the :c:macro:`NRF_RPC_GROUP_DEFINE`.
+Grouping allows locally divide the API, but also increase performance of nRF_PRC.
 
 Encoders
 --------
 
-Encoders are using to encode commands, events and command responses into serialized packets.
-Creating an encoder is similar for all packet type. In the first step you have to create and allocate a buffer for serializing data using :c:macro:`rp_ser_buf_alloc`.
-Next use one of the following function :cpp:func:`rp_ser_cmd_init`, :cpp:func:`rp_ser_evt_init` or :cpp:func:`rp_ser_rsp_init` to indicate packet type and initialize encoder.
-After that you can encode parameters using `TinyCBOR <https://intel.github.io/tinycbor/current/>`_ library.
-In last step send packet using one of the sending function.
-In case of command which returns data pass response decoder callback to sending function.
+Encoders encodes commands and events into serialized packets.
+Creating an encoder is similar for all packet type.
+The first step is allocation of the buffer using e.g. :c:macro:`NRF_RPC_CMD_ALLOC`, :c:macro:`NRF_RPC_CBOR_EVT_ALLOC` or similar depending what kind of packet will be send.
+After that you can encode parameters directly into buffer or using `TinyCBOR <https://intel.github.io/tinycbor/current/>`_ library.
+In the last step packet is send using one of the sending function, e.g. :cpp:func:`nrf_rpc_cmd_send`, :cpp:func:`nrf_rpc_cbor_evt_send` or similar.
 
-Encoding command:
+As the result of sending command response is received, so it have to be parsed.
+There are two ways to prase the response.
+
+First is to provide response handler in parameters of :cpp:func:`nrf_rpc_cmd_send`.
+It will be called before :cpp:func:`nrf_rpc_cmd_send` returns.
+It may be called from a different thread.
+
+Second is to call :cpp:func:`nrf_rpc_cmd_rsp_send` or :cpp:func:`nrf_rpc_cbor_cmd_rsp_send` which have output parameters that will contain the response.
+After parsing it :cpp:func:`nrf_rpc_decoding_done` function must be called to indicate that parsing is done and the buffers holding the response can be released.
+
+Events have not response, so nothing more have to be done after sending it.
+
+Sample command encoder using TinyCBOR API:
 
 .. code-block:: c
 
-	/* Helper static data */
-	struct entropy_rsp {
-		u8_t *buffer;
-		u16_t length;
-		int err_code;
-	};
-
-	/* Response decoder */
-	static rp_err_t entropy_get_rsp(CborValue *it)
+	/* Function will remotely increment `input` by one and put the
+	 * result into `output`. Function returns 0 on success or
+	 * non-zero error code.
+	 */
+	int remote_inc(int input, int *output)
 	{
 		int err;
-		size_t buf_len = rsp_data.length;
+		CborEncoder *encoder;
+		int result[2];
+		struct nrf_rpc_cbor_alloc_ctx ctx;
 
-		if (!cbor_value_is_integer(it) ||
-		    cbor_value_get_int(it, &err)) {
-			return RP_ERROR_INTERNAL;
+		NRF_RPC_CBOR_CMD_ALLOC(ctx, &math_group, encoder, 16,
+				       return NRF_RPC_NO_MEM);
+
+		cbor_encode_int(encoder, input);
+
+		err = nrf_rpc_cbor_cmd_send(&ctx, MATH_COMMAND_INC,
+					    remote_inc_rsp, result);
+
+		if (err == NRF_RPC_SUCCESS) {
+			*output = result[0];
+			err = result[1];
 		}
 
-		rsp_data.err_code = err;
-
-		if (cbor_value_advance_fixed(it) != CborNoError) {
-			return -RP_ERROR_INTERNAL;
-		}
-
-		if (!cbor_value_is_byte_string(it) ||
-		    cbor_value_copy_byte_string(it, rsp_data.buffer, &buf_len, it)) {
-			return RP_ERROR_INTERNAL;
-		}
-
-		if (buf_len != rsp_data.length) {
-			return RP_ERROR_INTERNAL;
-		}
-
-		return RP_SUCCESS;
+		return err;
 	}
 
-	/* Command encoder */
-	int entropy_remote_get(u8_t *buffer, u16_t length)
+Above code uses `remote_inc_rsp` function to parse the response.
+Following code shows how this function may look like.
+
+.. code-block:: c
+
+	static int remote_inc_rsp(CborValue *parser, void *hander_data)
 	{
-		rp_err_t err;
-		struct rp_ser_encoder encoder;
-		CborEncoder container;
-		size_t packet_size = SERIALIZATION_BUFFER_SIZE;
+		CborError cbor_err;
+		int *result = (int *)hander_data;
 
-		if (!buffer || length < 1) {
-			return -EINVAL;
+	 	if (!cbor_value_is_integer(parser)) {
+			goto cbor_error_exit;
 		}
 
-		rsp_data.buffer = buffer;
-		rsp_data.length = length;
-
-		rp_ser_buf_alloc(entropy_ser, encoder, packet_size);
-
-		err = rp_ser_procedure_initialize(&encoder, &container,
-						  ENTROPY_GET_CMD_PARAM_CNT,
-						  RP_SER_PACKET_TYPE_CMD,
-						  SER_COMMAND_ENTROPY_GET);
-		if (err) {
-			return -EINVAL;
+		cbor_err = cbor_value_get_int(parser, &result[0]);
+		if (cbor_err != CborNoError) {
+			goto cbor_error_exit;
 		}
 
-		if (cbor_encode_int(&container, length) != CborNoError) {
-			return -EINVAL;
-		}
+		result[1] = NRF_RPC_SUCCESS;
+		return NRF_RPC_SUCCESS;
 
-		err = rp_ser_procedure_end(&encoder);
-		if (err) {
-			return -EINVAL;
-		}
-
-		/* Send command, if response handler is not NULL this function
-		 * waits for response from the Remote processor an call response handler.
-		 */
-		err = rp_ser_cmd_send(&entropy_ser, &encoder, entropy_get_rsp);
-		if (err) {
-			return -EINVAL;
-		}
-
-		return rsp_data.err_code;
+	cbor_error_exit:
+		result[1] = NRF_RPC_ERR_INVALID_PARAM;
+		return NRF_RPC_SUCCESS;
 	}
 
 Decoders
 --------
 
-Decoders is called automatically when receiving command with matching command value.
-In case of command decoders, after calling the desired function, they can also encode returned values and send it back to the calling processor in a Response packet.
+Decoders are registered with a :c:macro:`NRF_RPC_CMD_DECODER`, :c:macro:`NRF_RPC_CBOR_EVT_DECODER` or similar depending on what kind of decoder it will be.
+Decoders are called automatically when command or event is received with a matching id.
+Commands decoders must also send a response.
 
-Decoders registration:
+Decoder associated with the examples above may be following:
 
 .. code-block:: c
 
-	static rp_err_t entropy_init_handler(CborValue *it)
+	static int remote_inc_handler(CborValue *packet, void* handler_data)
 	{
-		int err;
+		int input;
+		int output;
+		struct nrf_rpc_cbor_alloc_ctx ctx;
+		CborEncoder *encoder;
+		CborError cbor_err;
 
-		entropy = device_get_binding(CONFIG_ENTROPY_NAME);
-		if (!entropy) {
-			rsp_error_code_sent(-EINVAL);
+		/* Parsing the input */
 
-			return RP_ERROR_INTERNAL;
+	 	if (cbor_value_is_integer(parser)) {
+			cbor_err = cbor_value_get_int(packet, &input);
+		} else {
+			cbor_err = CborErrorIO;
+		}
+		
+		nrf_rpc_decoding_done();
+
+		if (cbor_err != CborNoError) {
+			return NRF_RPC_ERR_INTERNAL;
 		}
 
-		err = rsp_error_code_sent(0);
-		if (err) {
-			return RP_ERROR_INTERNAL;
-		}
+		/* Actual hard work is done in below line */
 
-		return RP_SUCCESS;
+		output = input + 1;
+
+		/* Encoding and sending the response */
+
+		NRF_RPC_CBOR_RSP_ALLOC(ctx, encoder, 16,
+				       return -NRF_RPC_ERR_NO_MEM);
+
+		cbor_encode_int(encoder, output);
+
+		return nrf_rpc_cbor_rsp_send(&ctx);
 	}
 
- 	RP_SER_CMD_DECODER(entropy_ser, entropy_init, SER_COMMAND_ENTROPY_INIT,
-			   entropy_init_handler);
+	NRF_RPC_CBOR_CMD_DECODER(math_group, remote_inc, MATH_COMMAND_INC,
+				 remote_inc_handler, NULL);
+
+Error handling
+==============
+
+In some cases error cannot be returned directly to the user e.g. as a return value.
+One example of that situation is when a packet was received, but it is corrupted.
+In this case user function :cpp:func:`nrf_rpc_error_handler` will be called.
+It is weakly defined in nRF_RPC, so it can be overridden by the user definition.
+Default weak implementation is empty, but the error is put to the log before calling :cpp:func:`nrf_rpc_error_handler`.
+
+Second situation is when we want to serialize function that returns `void`.
+We cannot return an error code in this case.
+It is possible to use :cpp:func:`nrf_rpc_cmd_send_noerr` or :cpp:func:`nrf_rpc_cbor_cmd_send_noerr` which returns `void` and any error redirects to :cpp:func:`nrf_rpc_error_handler`.
+
+:cpp:func:`nrf_rpc_report_error` can be used to pass errors to :cpp:func:`nrf_rpc_error_handler`.
+
+:cpp:func:`nrf_rpc_error_handler` will also receive fatal errors that happen on the remote side and they may affect stability of the nRF_RPC connection.

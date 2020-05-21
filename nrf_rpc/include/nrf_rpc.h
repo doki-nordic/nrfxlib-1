@@ -98,19 +98,13 @@ struct nrf_rpc_local_ep {
 };
 
 
-/** @brief Contains resources allocated by @a NRF_RPC_CMD_ALLOC.
+/** @brief Type of context variable for allocated resources.
+ *
+ * Variable of this type should be used as a context for @a NRF_RPC_CMD_ALLOC,
+ * @a NRF_RPC_EVT_ALLOC and @a NRF_RPC_RPS_ALLOC. After that should be passed
+ * to any of the send functions.
  */
-typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_cmd_ctx_t;
-
-
-/** @brief Contains resources allocated by @a NRF_RPC_EVT_ALLOC.
- */
-typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_evt_ctx_t;
-
-
-/** @brief Contains resources allocated by @a NRF_RPC_RSP_ALLOC.
- */
-typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_rsp_ctx_t;
+typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_alloc_ctx;
 
 
 /** @brief Define a group of commands and events.
@@ -314,7 +308,7 @@ int nrf_rpc_init(void);
  * @returns            NRF_RPC_SUCCESS or error code from
  *                     enum nrf_rpc_error_code.
  */
-int nrf_rpc_cmd_send(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
+int nrf_rpc_cmd_send(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
 		     size_t len, nrf_rpc_handler_t handler, void *handler_data);
 
 
@@ -338,7 +332,7 @@ int nrf_rpc_cmd_send(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
  * @returns               NRF_RPC_SUCCESS or error code from
  *                        enum nrf_rpc_error_code.
  */
-int nrf_rpc_cmd_rsp_send(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
+int nrf_rpc_cmd_rsp_send(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
 			 size_t len, const uint8_t **rsp_packet,
 			 size_t *rsp_len);
 
@@ -352,7 +346,7 @@ int nrf_rpc_cmd_rsp_send(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
  *
  * See @a nrf_rpc_cmd_send for more details.
  */
-void nrf_rpc_cmd_send_noerr(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
+void nrf_rpc_cmd_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
 			    size_t len, nrf_rpc_handler_t handler,
 			    void *handler_data);
 
@@ -370,7 +364,7 @@ void nrf_rpc_cmd_send_noerr(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
  * @param len       Length of the packet. Can be smaller than allocated.
  * @returns         NRF_RPC_SUCCESS or error code from enum nrf_rpc_error_code.
  */
-int nrf_rpc_evt_send(nrf_rpc_evt_ctx_t ctx, uint8_t evt, uint8_t *packet,
+int nrf_rpc_evt_send(nrf_rpc_alloc_ctx ctx, uint8_t evt, uint8_t *packet,
 		     size_t len);
 
 
@@ -383,7 +377,7 @@ int nrf_rpc_evt_send(nrf_rpc_evt_ctx_t ctx, uint8_t evt, uint8_t *packet,
  *
  * See @a nrf_rpc_evt_send for more details.
  */
-void nrf_rpc_evt_send_noerr(nrf_rpc_evt_ctx_t ctx, uint8_t evt, uint8_t *packet,
+void nrf_rpc_evt_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t evt, uint8_t *packet,
 			    size_t len);
 
 
@@ -400,7 +394,7 @@ void nrf_rpc_evt_send_noerr(nrf_rpc_evt_ctx_t ctx, uint8_t evt, uint8_t *packet,
  * @param len       Length of the packet. Can be smaller than allocated.
  * @returns         NRF_RPC_SUCCESS or error code from enum nrf_rpc_error_code.
  */
-int nrf_rpc_rsp_send(nrf_rpc_rsp_ctx_t ctx, uint8_t *packet, size_t len);
+int nrf_rpc_rsp_send(nrf_rpc_alloc_ctx ctx, uint8_t *packet, size_t len);
 
 
 /** @brief Indicate that decoding of the input data is done.
@@ -437,7 +431,7 @@ void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 			   bool from_remote);
 
 
-void nrf_rpc_report_error(nrf_rpc_cmd_ctx_t ctx, int code);
+void nrf_rpc_report_error(nrf_rpc_alloc_ctx ctx, int code);
 
 /**
  * @}

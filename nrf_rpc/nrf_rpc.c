@@ -608,7 +608,7 @@ error_exit:
 }
 
 
-int nrf_rpc_cmd_send(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
+int nrf_rpc_cmd_send(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
 		     size_t len, nrf_rpc_handler_t handler, void *handler_data)
 {
 	struct nrf_rpc_tr_remote_ep *tr_remote_ep = ctx;
@@ -618,7 +618,7 @@ int nrf_rpc_cmd_send(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
 }
 
 
-int nrf_rpc_cmd_rsp_send(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
+int nrf_rpc_cmd_rsp_send(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
 			 size_t len, const uint8_t **rsp_packet,
 			 size_t *rsp_len)
 {
@@ -629,7 +629,7 @@ int nrf_rpc_cmd_rsp_send(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
 }
 
 
-void nrf_rpc_cmd_send_noerr(nrf_rpc_cmd_ctx_t ctx, uint8_t cmd, uint8_t *packet,
+void nrf_rpc_cmd_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
 			    size_t len, nrf_rpc_handler_t handler,
 			    void *handler_data)
 {
@@ -678,7 +678,7 @@ void _nrf_rpc_evt_unprep(struct nrf_rpc_tr_remote_ep *tr_remote_ep)
 }
 
 
-int nrf_rpc_evt_send(nrf_rpc_evt_ctx_t ctx, uint8_t evt, uint8_t *packet,
+int nrf_rpc_evt_send(nrf_rpc_alloc_ctx ctx, uint8_t evt, uint8_t *packet,
 		     size_t len)
 {
 	int err;
@@ -703,7 +703,7 @@ int nrf_rpc_evt_send(nrf_rpc_evt_ctx_t ctx, uint8_t evt, uint8_t *packet,
 }
 
 
-void nrf_rpc_evt_send_noerr(nrf_rpc_evt_ctx_t ctx, uint8_t evt, uint8_t *packet,
+void nrf_rpc_evt_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t evt, uint8_t *packet,
 			    size_t len)
 {
 	int err;
@@ -733,7 +733,7 @@ struct nrf_rpc_tr_remote_ep *_nrf_rpc_rsp_prep()
 }
 
 
-int nrf_rpc_rsp_send(nrf_rpc_rsp_ctx_t ctx, uint8_t *packet, size_t len)
+int nrf_rpc_rsp_send(nrf_rpc_alloc_ctx ctx, uint8_t *packet, size_t len)
 {
 	int err;
 	struct nrf_rpc_tr_remote_ep *tr_remote_ep = ctx;
@@ -774,7 +774,7 @@ void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 }
 
 
-void nrf_rpc_report_error(nrf_rpc_cmd_ctx_t ctx, int err)
+void nrf_rpc_report_error(nrf_rpc_alloc_ctx ctx, int err)
 {
 	struct nrf_rpc_tr_local_ep *tr_local_ep;
 	struct nrf_rpc_tr_remote_ep *tr_remote_ep = ctx;

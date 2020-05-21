@@ -29,6 +29,8 @@
 /**
  * @defgroup nrf_rpc_tr nRF RPC transport layer
  * @{
+ * @ingroup nrf_rpc
+ *
  * @brief nRF RPC transport layer API.
  */
 
