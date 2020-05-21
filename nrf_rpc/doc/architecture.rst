@@ -1,5 +1,6 @@
 .. architecture:
 
+
 Architecture
 ############
 
@@ -27,7 +28,7 @@ Following image shows an example of the command and response flow.
 **Events** are intended to be used for an asynchronous function calls.
 The caller sends an event to the other side and returns immediately if there is free thread in thread pool, otherwise it waits for available thread.
 It is not possible to return anything from the remote side, but it is possible to send another event in opposite direction.
-Following image shows an example of the event flow.
+Following image shows an example of the event flow. 
  
 .. image:: img/evt_flow.svg
    :alt: nRF_RPC Event flow
@@ -35,7 +36,8 @@ Following image shows an example of the event flow.
 
 
 Threads
-======================
+=======
+
 When a remote procedure call arrived it must be executed in context of some thread.
 For this reason each side of the nRF_PRC contains a thread pool.
 It is OS-dependent, so it is handled by the transport layer.
@@ -83,12 +85,12 @@ It is possible to use :cpp:func:`nrf_rpc_cmd_send_noerr` or :cpp:func:`nrf_rpc_c
 
 :cpp:func:`nrf_rpc_error_handler` will also receive fatal errors that happen on the remote side and they may affect stability of the nRF_RPC connection.
 
+
 Porting to OS
-==============
+=============
 
 The nRF_RPC needs a port for the operating system.
 It has to provide:
 
 * ``nrf_rpc_log.h`` for logging system abstraction according to the template ``template/nrf_rpc_log.h``.
 * Transport layer according to the template ``template/rp_trans_tmpl.h``.
-

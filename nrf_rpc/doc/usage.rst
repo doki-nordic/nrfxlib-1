@@ -1,5 +1,6 @@
 .. _usage:
 
+
 Implementing Remote Procedure Calls
 ###################################
 
@@ -12,7 +13,8 @@ Main goal of the nRF_RPC API is to allow creation of encoders/decoders.
 Encoders and decoders are grouped.
 Each group contains functions related to a single API, e.g. Bluetooth, entropy, e.t.c.
 Group is created with the :c:macro:`NRF_RPC_GROUP_DEFINE`.
-Grouping allows locally divide the API, but also increase performance of nRF_PRC.
+Grouping allows logically divide the remote API, but also increase performance of nRF_PRC.
+
 
 Encoders
 ========
@@ -92,6 +94,7 @@ Following code shows how this function may look like.
 		result[1] = NRF_RPC_ERR_INVALID_PARAM;
 		return NRF_RPC_SUCCESS;
 	}
+
 
 Decoders
 ========
