@@ -22,5 +22,5 @@ Semiconductor. Refer to their respective documentation for more information.
    mpsl/README
    nrf_security/README
    nfc/README
-   serialization/README
+   nrf_rpc/README
    kconfig/index

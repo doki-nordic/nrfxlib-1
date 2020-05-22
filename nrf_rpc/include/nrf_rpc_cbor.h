@@ -125,7 +125,7 @@ struct _nrf_rpc_cbor_decoder {
  *
  * @param _ctx    Context that was previously allocated.
  */
-#define NRF_RPC_CBOR_CMD_DISCARD(_ctx,)					       \
+#define NRF_RPC_CBOR_CMD_DISCARD(_ctx)					       \
 	NRF_RPC_CMD_DISCARD(_ctx.base_ctx, _ctx.packet)
 
 
@@ -155,7 +155,7 @@ struct _nrf_rpc_cbor_decoder {
  *
  * @param _ctx    Context that was previously allocated.
  */
-#define NRF_RPC_CBOR_EVT_DISCARD(_ctx, _packet)				       \
+#define NRF_RPC_CBOR_EVT_DISCARD(_ctx)					       \
 	NRF_RPC_EVT_DISCARD(_ctx.base_ctx, _ctx.packet)
 
 
