@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 #define NRF_RPC_LOG_MODULE NRF_RPC
 #include <nrf_rpc_log.h>
@@ -40,6 +40,10 @@ enum {
 NRF_RPC_AUTO_ARR(nrf_rpc_groups_array, "grp");
 
 
+/* Number of groups */
+static uint8_t group_id_count; 
+
+
 /* ======================== Common utilities ======================== */
 
 
@@ -71,7 +75,7 @@ static int send_simple(struct nrf_rpc_tr_local_ep *tr_local_ep,
 				_NRF_RPC_HEADER_SIZE + len);
 
 	if (nrf_rpc_tr_alloc_failed(tx_buf)) {
-		return NRF_RPC_ERR_NO_MEM;
+		return -ENOMEM;
 	}
 
 	header_variant_2(tx_buf, type);
@@ -87,15 +91,15 @@ static int send_simple(struct nrf_rpc_tr_local_ep *tr_local_ep,
 
 /** Report an error that cannot be reported as a function return value */
 static void report_error(struct nrf_rpc_tr_local_ep *tr_local_ep,
-			 struct nrf_rpc_tr_remote_ep *tr_remote_ep, int code,
-			 uint32_t flags)
+			 struct nrf_rpc_tr_remote_ep *tr_remote_ep,
+			 uint8_t cmd_evt_id, int code, uint32_t flags)
 {
 	NRF_RPC_ERR("%sERROR: code=%d local=%d remote=%d",
 		   flags & ERROR_FLAG_REMOTE ? "REMOTE " : "", code,
 		   tr_local_ep ? tr_local_ep->addr : -1,
 		   tr_remote_ep ? tr_remote_ep->addr : -1);
 
-	nrf_rpc_error_handler(tr_local_ep, tr_remote_ep, code,
+	nrf_rpc_error_handler(tr_local_ep, tr_remote_ep, cmd_evt_id, code,
 			      flags & ERROR_FLAG_REMOTE);
 
 	if (flags & ERROR_FLAG_SEND) {
@@ -148,26 +152,19 @@ static int handler_execute(uint8_t id, const uint8_t *packet, size_t len,
 	}
 
 	NRF_RPC_ERR("Unsupported command or event received");
-	return NRF_RPC_ERR_NOT_SUPPORTED;
+	return -ENOSYS;
 }
 
 
 /** Search for a group based on group_id */
 static const struct nrf_rpc_group *group_from_id(uint8_t group_id)
 {
-	void *iter;
-	const struct nrf_rpc_group *group;
-
-	for (NRF_RPC_AUTO_ARR_FOR(iter, group, &nrf_rpc_groups_array,
-				 const struct nrf_rpc_group)) {
-
-		if (group->group_id == group_id) {
-			return group;
-		}
+	if (group_id >= group_id_count) {
+		return NULL;
 	}
 
-	NRF_RPC_ERR("Unknown group 0x%02X", group_id);
-	return NULL;
+	return &NRF_RPC_AUTO_ARR_GET(&nrf_rpc_groups_array, group_id,
+				    const struct nrf_rpc_group);
 }
 
 
@@ -180,7 +177,7 @@ static const struct nrf_rpc_group *group_from_id(uint8_t group_id)
  * @param len               Length of the packet.
  * @param response_expected If packet contains response and this parameter is
  *                          false then error code will be returned.
- * @return NRF_RPC_SUCCESS if packet was correctly parsed and executed.
+ * @return 0 if packet was correctly parsed and executed.
  *         PACKET_TYPE_RSP if packet contains a response and response_expected
  *         was true. Negative error code on failure.
  */
@@ -203,7 +200,7 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 	NRF_RPC_ASSERT(valid_packet(packet));
 
 	if (len < _NRF_RPC_HEADER_SIZE) {
-		result = NRF_RPC_ERR_INTERNAL;
+		result = -EIO;
 		goto exit_function;
 	}
 
@@ -219,7 +216,7 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 	case PACKET_TYPE_CMD:
 		/* Group and remote endpoint must be known for the commands */
 		if (group == NULL || tr_remote_ep == NULL) {
-			result = NRF_RPC_ERR_INTERNAL;
+			result = -EIO;
 			goto exit_function;
 		}
 		/* Default destination is set to sender and restored later */
@@ -227,7 +224,7 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 		local_ep->default_dst = remote_ep;
 		/* Executing associated handler from command array */
 		NRF_RPC_DBG("Executing command 0x%02X from group 0x%02X", id,
-			   group->group_id);
+			    *group->group_id);
 		result = handler_execute(id, &packet[_NRF_RPC_HEADER_SIZE],
 					 len - _NRF_RPC_HEADER_SIZE,
 					 group->cmd_array);
@@ -237,12 +234,12 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 	case PACKET_TYPE_EVT:
 		/* Group must be known for the events */
 		if (group == NULL) {
-			result = NRF_RPC_ERR_INTERNAL;
+			result = -EIO;
 			goto exit_function;
 		}
 		/* Executing associated handler from event array */
 		NRF_RPC_DBG("Executing event 0x%02X from group 0x%02X", id,
-			   group->group_id);
+			    *group->group_id);
 		result = handler_execute(id, &packet[_NRF_RPC_HEADER_SIZE],
 					 len - _NRF_RPC_HEADER_SIZE,
 					 group->evt_array);
@@ -263,7 +260,7 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 			return type;
 		} else {
 			NRF_RPC_ERR("Response not expected at this point");
-			result = NRF_RPC_ERR_INVALID_STATE;
+			result = -EIO;
 		}
 		break;
 
@@ -272,7 +269,7 @@ static int parse_incoming_packet(struct nrf_rpc_local_ep *local_ep,
 	default:
 		/* ERR and ACK packets should be handled before in filter */
 		NRF_RPC_ERR("Packet type 0x%02X not expected", type);
-		result = NRF_RPC_ERR_INVALID_STATE;
+		result = -EIO;
 		break;
 	}
 
@@ -301,7 +298,7 @@ static void receive_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 			    struct nrf_rpc_tr_remote_ep *tr_remote_ep,
 			    const uint8_t *packet, int len)
 {
-	int err = NRF_RPC_SUCCESS;
+	int err = 0;
 	struct nrf_rpc_local_ep *local_ep = NRF_RPC_CONTAINER_OF(tr_local_ep,
 		struct nrf_rpc_local_ep, tr_ep);
 
@@ -316,7 +313,8 @@ static void receive_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 	}
 
 	if (err < 0) {
-		report_error(tr_local_ep, tr_remote_ep, err, ERROR_FLAG_SEND);
+		report_error(tr_local_ep, tr_remote_ep, NRF_RPC_UNKNOWN_ID, err,
+			     ERROR_FLAG_SEND);
 	}
 }
 
@@ -339,7 +337,7 @@ static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 			       const uint8_t *packet, int len)
 {
 	uint8_t type;
-	int err = NRF_RPC_SUCCESS;
+	int err = 0;
 	struct nrf_rpc_local_ep *local_ep = NRF_RPC_CONTAINER_OF(tr_local_ep,
 		struct nrf_rpc_local_ep, tr_ep);
 
@@ -348,12 +346,13 @@ static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 	if (len < 0) {
 		err = len;
 	} else if (len < _NRF_RPC_HEADER_SIZE) {
-		err = NRF_RPC_ERR_INTERNAL;
+		err = -EIO;
 	}
 
 	if (err < 0) {
 		NRF_RPC_ERR("Packet receive error %d", err);
-		report_error(tr_local_ep, tr_remote_ep, err, 0);
+		report_error(tr_local_ep, tr_remote_ep, NRF_RPC_UNKNOWN_ID, err,
+			     0);
 		return PACKET_TYPE_ERR;
 	}
 
@@ -369,6 +368,7 @@ static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 	case PACKET_TYPE_ERR:
 		if (len >= _NRF_RPC_HEADER_SIZE + 1) {
 			report_error(tr_local_ep, tr_remote_ep,
+				     NRF_RPC_UNKNOWN_ID,
 				     (int8_t)packet[_NRF_RPC_HEADER_SIZE],
 				     ERROR_FLAG_REMOTE);
 		}
@@ -378,7 +378,7 @@ static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 		if (tr_local_ep == NULL) {
 			NRF_RPC_ERR("Response arrived to unexpected endpoint");
 			report_error(tr_local_ep, tr_remote_ep,
-				     NRF_RPC_ERR_INVALID_STATE, 0);
+				     NRF_RPC_UNKNOWN_ID, -EIO, 0);
 			return PACKET_TYPE_ERR;
 		} else if (local_ep->handler != NULL) {
 			NRF_RPC_DBG("Executing response handler");
@@ -389,7 +389,8 @@ static uint32_t filter_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
 			if (err < 0) {
 				NRF_RPC_ERR("Response handler returned an "
 					   "error %d", err);
-				report_error(tr_local_ep, tr_remote_ep, err, 0);
+				report_error(tr_local_ep, tr_remote_ep,
+					     NRF_RPC_UNKNOWN_ID, err, 0);
 			}
 			return type;
 		}
@@ -443,7 +444,7 @@ struct nrf_rpc_tr_remote_ep *_nrf_rpc_cmd_prep(
 		local_ep->cmd_nesting_counter++;
 	}
 
-	local_ep->default_dst->current_group_id = group->group_id;
+	local_ep->default_dst->current_group_id = *group->group_id;
 
 	return &local_ep->default_dst->tr_ep;
 }
@@ -454,7 +455,7 @@ void _nrf_rpc_cmd_alloc_error(struct nrf_rpc_tr_remote_ep *tr_remote_ep)
 	struct nrf_rpc_tr_local_ep *tr_local_ep = nrf_rpc_tr_current_get();
 
 	NRF_RPC_ERR("Command allocation failed");
-	report_error(tr_local_ep, tr_remote_ep, NRF_RPC_ERR_NO_MEM, 0);
+	report_error(tr_local_ep, tr_remote_ep, NRF_RPC_UNKNOWN_ID, -ENOMEM, 0);
 
 	_nrf_rpc_cmd_unprep();
 }
@@ -488,7 +489,7 @@ void _nrf_rpc_cmd_unprep(void)
  * @param      local_ep   Endpoint that will receive the response.
  * @param[out] rsp_packet If not NULL contains response packet data.
  * @param[out] rsp_len    If not NULL contains response packet length.
- * @return NRF_RPC_SUCCESS on success or negative error code.
+ * @return 0 on success or negative error code.
  */
 static int wait_for_response(struct nrf_rpc_local_ep *local_ep,
 			     const uint8_t **rsp_packet, size_t *rsp_len)
@@ -513,9 +514,9 @@ static int wait_for_response(struct nrf_rpc_local_ep *local_ep,
 			NRF_RPC_DBG("Filtered packet of type 0x%02X received",
 				   len);
 			if (len == PACKET_TYPE_ERR) {
-				return NRF_RPC_ERR_REMOTE;
+				return -EPROTO;
 			} else if (len == PACKET_TYPE_RSP) {
-				return NRF_RPC_SUCCESS;
+				return 0;
 			} else {
 				continue;
 			}
@@ -535,7 +536,7 @@ static int wait_for_response(struct nrf_rpc_local_ep *local_ep,
 		*rsp_len = len - _NRF_RPC_HEADER_SIZE;
 	}
 
-	return NRF_RPC_SUCCESS;
+	return 0;
 }
 
 
@@ -562,7 +563,7 @@ static int cmd_send_common(struct nrf_rpc_tr_remote_ep *tr_remote_ep,
 
 	if (tr_local_ep == NULL || tr_remote_ep == NULL) {
 		NRF_RPC_ERR("Invalid endpoint");
-		return NRF_RPC_ERR_NO_MEM;
+		return -ENOMEM;
 	}
 
 	if (cmd & CMD_FLAG_WITH_RSP) {
@@ -642,7 +643,7 @@ void nrf_rpc_cmd_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
 		tr_local_ep = nrf_rpc_tr_current_get();
-		report_error(tr_local_ep, tr_remote_ep, err, 0);
+		report_error(tr_local_ep, tr_remote_ep, cmd, err, 0);
 	}
 }
 
@@ -657,7 +658,7 @@ struct nrf_rpc_tr_remote_ep *_nrf_rpc_evt_prep(
 	struct nrf_rpc_remote_ep *remote_ep = NRF_RPC_CONTAINER_OF(tr_remote_ep,
 		struct nrf_rpc_remote_ep, tr_ep);
 
-	remote_ep->current_group_id = group->group_id;
+	remote_ep->current_group_id = *group->group_id;
 
 	return &remote_ep->tr_ep;
 }
@@ -666,7 +667,7 @@ struct nrf_rpc_tr_remote_ep *_nrf_rpc_evt_prep(
 void _nrf_rpc_evt_alloc_error(struct nrf_rpc_tr_remote_ep *tr_remote_ep)
 {
 	NRF_RPC_ERR("Event allocation failed");
-	report_error(NULL, tr_remote_ep, NRF_RPC_ERR_NO_MEM, 0);
+	report_error(NULL, tr_remote_ep, NRF_RPC_UNKNOWN_ID, -ENOMEM, 0);
 	_nrf_rpc_evt_unprep(tr_remote_ep);
 }
 
@@ -712,7 +713,7 @@ void nrf_rpc_evt_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t evt, uint8_t *packet,
 	err = nrf_rpc_evt_send(tr_remote_ep, evt, packet, len);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled event send error %d", err);
-		report_error(NULL, tr_remote_ep, err, 0);
+		report_error(NULL, tr_remote_ep, evt, err, 0);
 	}
 }
 
@@ -760,27 +761,44 @@ int nrf_rpc_rsp_send(nrf_rpc_alloc_ctx ctx, uint8_t *packet, size_t len)
 
 int nrf_rpc_init(void)
 {
+	void *iter;
+	const struct nrf_rpc_group *group;
+	uint8_t group_id = 0;
+
 	NRF_RPC_DBG("Initializing nRF RPC Module");
+
+	for (NRF_RPC_AUTO_ARR_FOR(iter, group, &nrf_rpc_groups_array,
+				 const struct nrf_rpc_group)) {
+		
+		if (group_id > 0x7F) {
+			return -ENOMEM;
+		}
+		*group->group_id = group_id;
+		group_id++;
+	}
+
+	group_id_count = group_id;
+
 	return nrf_rpc_tr_init(receive_handler, filter_handler);
 }
 
 
 __attribute__((weak))
 void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
-			   struct nrf_rpc_tr_remote_ep *tr_remote_ep, int code,
-			   bool from_remote)
+			   struct nrf_rpc_tr_remote_ep *tr_remote_ep,
+			   uint8_t cmd_evt_id, int code, bool from_remote)
 {
 	NRF_RPC_DBG("Empty Error Handler called");
 }
 
 
-void nrf_rpc_report_error(nrf_rpc_alloc_ctx ctx, int err)
+void nrf_rpc_report_error(nrf_rpc_alloc_ctx ctx, uint8_t cmd_evt_id, int code)
 {
 	struct nrf_rpc_tr_local_ep *tr_local_ep;
 	struct nrf_rpc_tr_remote_ep *tr_remote_ep = ctx;
 
-	if (err < 0) {
+	if (code < 0) {
 		tr_local_ep = nrf_rpc_tr_current_get();
-		report_error(tr_local_ep, tr_remote_ep, err, 0);
+		report_error(tr_local_ep, tr_remote_ep, cmd_evt_id, code, 0);
 	}
 }

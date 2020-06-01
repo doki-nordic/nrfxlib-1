@@ -1,8 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: Apache-2.0
- *
+ * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
 #ifndef NRF_RPC_TR_TMPL_H_
@@ -143,7 +142,7 @@ typedef uint32_t (*nrf_rpc_tr_filter)(struct nrf_rpc_tr_local_ep *dst_ep,
  * @param filter   A callback called to filter the packets as soos as possible
  *                 before they goes to destination.
  * 
- * @return NRF_RPC_SUCCESS or negative error code.
+ * @return 0 or negative error code.
  */
 int nrf_rpc_tr_init(nrf_rpc_tr_receive_handler callback,
 		    nrf_rpc_tr_filter filter);
@@ -197,7 +196,7 @@ bool nrf_rpc_tr_alloc_failed(uint8_t *buf);
  *                 After call this buffer cannout be used again
  * @param len      Length of @a buf, may be less than allocated.
  * 
- * @return NRF_RPC_SUCCESS or negative error code.
+ * @return 0 or negative error code.
  */
 int nrf_rpc_tr_send(struct nrf_rpc_tr_local_ep *local_ep,
 		    struct nrf_rpc_tr_remote_ep *dst_ep, u8_t *buf, size_t len);
