@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
 #ifndef _NRF_RPC_COMMON_H_
@@ -109,11 +109,11 @@ extern "C" {
  *                   @a NRF_RPC_AUTO_ARR_ITEM.
  */
 #define NRF_RPC_AUTO_ARR(_name, _array_key)				       \
-	const uint8_t NRF_RPC_CONCAT(_name, _ord_var_end) __used	       \
+	const uint8_t NRF_RPC_CONCAT(_name, _auto_arr_end) __used	       \
 	__attribute__((__section__(".nrf_rpc." _array_key ".c")));	       \
 	const uint8_t *const _name __used				       \
 	__attribute__((__section__(".nrf_rpc." _array_key ".a"))) =	       \
-		&NRF_RPC_CONCAT(_name, _ord_var_end)
+		&NRF_RPC_CONCAT(_name, _auto_arr_end)
 
 /** @brief Adds new variable to the array.
  *
@@ -140,6 +140,32 @@ extern "C" {
 		(const uint8_t *const)_var <				       \
 			*(const uint8_t *const *)(_array_ptr);		       \
 		(_var) = (_type *)(_var) + 1, (void)_it
+
+/** @brief Get item from the array.
+ *
+ * @param _array_ptr Pointer to array.
+ * @param _index     Index of the item.
+ * @param _type      Type of items in array.
+ */
+#define NRF_RPC_AUTO_ARR_GET(_array_ptr, _index, _type)			       \
+	(((_type *)((const uint8_t *const *)(_array_ptr) + 1))[_index])
+
+/* Error codes definitions if they are not defined by the platform */
+#ifndef EIO
+#define EIO 5
+#endif
+#ifndef EINVAL
+#define EINVAL 22
+#endif
+#ifndef ENOMEM
+#define ENOMEM 12
+#endif
+#ifndef EPROTO
+#define EPROTO 71
+#endif
+#ifndef ENOSYS
+#define ENOSYS 88
+#endif
 
 /**
  * @}

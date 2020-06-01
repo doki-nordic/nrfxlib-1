@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
 
@@ -17,7 +17,6 @@
 #include <tinycbor/cbor_buf_reader.h>
 
 #include <nrf_rpc.h>
-#include <nrf_rpc_errors.h>
 #include <nrf_rpc_common.h>
 #include <nrf_rpc_tr.h>
 
@@ -218,8 +217,7 @@ int _nrf_rpc_cbor_proxy_handler(const uint8_t *packet, size_t len,
  * @param handler      Callback that handles the response. In case of error
  *                     it is undefined if the handler will be called.
  * @param handler_data Opaque pointer that will be passed to a handler.
- * @returns            @ref NRF_RPC_SUCCESS or error code from
- *                     enum @ref nrf_rpc_error_code.
+ * @returns            0 or negative error code.
  */
 int nrf_rpc_cbor_cmd_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t cmd,
 			  nrf_rpc_cbor_handler_t handler, void *handler_data);
@@ -235,8 +233,7 @@ int nrf_rpc_cbor_cmd_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t cmd,
  * @param cmd             Command id.
  * @param rsp_ctx         Additional context to hold response data.
  * @param rsp_packet      TinyCBOR value that will contain response packet.
- * @returns               @ref NRF_RPC_SUCCESS or error code from
- *                        enum @ref nrf_rpc_error_code.
+ * @returns               0 or negative error code.
  */
 int nrf_rpc_cbor_cmd_rsp_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t cmd,
 			      struct nrf_rpc_cbor_cmd_rsp_ctx *rsp_ctx,
@@ -261,8 +258,7 @@ void nrf_rpc_cbor_cmd_send_noerr(struct  nrf_rpc_cbor_alloc_ctx *ctx,
  * @param ctx       Context that was previously allocated by the
  *                  @ref NRF_RPC_CBOR_EVT_ALLOC.
  * @param evt       Event id.
- * @returns         @ref NRF_RPC_SUCCESS or error code from
- *                  enum @ref nrf_rpc_error_code.
+ * @returns         0 or negative error code.
  */
 int nrf_rpc_cbor_evt_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t evt);
 
@@ -283,8 +279,7 @@ void nrf_rpc_cbor_evt_send_noerr(struct nrf_rpc_cbor_alloc_ctx *ctx,
  *
  * @param ctx       Context that was previously allocated by the
  *                  @ref NRF_RPC_CBOR_RSP_ALLOC.
- * @returns         @ref NRF_RPC_SUCCESS or error code from
- *                  enum @ref nrf_rpc_error_code.
+ * @returns         0 or negative error code.
  */
 int nrf_rpc_cbor_rsp_send(struct nrf_rpc_cbor_alloc_ctx *ctx);
 

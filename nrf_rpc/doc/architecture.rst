@@ -19,14 +19,14 @@ Calls can be done in one of two ways: using a command/response or an event.
 **Command and response** are intended to be used for a synchronous function calls.
 The caller sends the command to the other side and waits for a response.
 The response is sent after the remote function returns on the remote core.
-Following image shows an example of the command and response flow.
+The following image shows an example of the command and response flow.
 
 .. image:: img/cmd_flow.svg
    :alt: nRF_RPC Command/Response flow
    :align: center
 
 **Events** are intended to be used for an asynchronous function calls.
-The caller sends an event to the other side and returns immediately if there is free thread in thread pool, otherwise it waits for available thread.
+The caller sends an event to the other side and returns immediately if there is free thread in thread pool (see :ref:`Threads` section), otherwise it waits for available thread.
 It is not possible to return anything from the remote side after receiving an Event, but it is possible to send an Event in opposite direction.
 The following image shows an example of the event flow.
 
@@ -60,7 +60,7 @@ A thread waiting for a response may be reused to receive a new incoming command 
    :align: center
 
 Events always reserve a new thread from remote thread pool.
-It is dangerous to send a lot of events one after another because each event will reserve a new thread, so the thread pool may be consumed entirely.
+Special attention is required when sending multiple events one after another, because each event will reserve a new thread. Sending events too fast may consume entire thread pool and as the result block all the outgoing commands and events.
 Sample events are shown on below diagram.
 
 .. image:: img/evt_simple.svg
@@ -87,7 +87,7 @@ It is possible to use :cpp:func:`nrf_rpc_cmd_send_noerr` or :cpp:func:`nrf_rpc_c
 
 
 Porting to another operating system
-=============
+===================================
 
 The nRF_RPC needs a port for the operating system.
 It has to provide:
