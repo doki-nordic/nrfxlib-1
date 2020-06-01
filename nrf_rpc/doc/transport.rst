@@ -14,7 +14,7 @@ NOTE: It is not required to know how the transport layer is implemented when usi
 Knowledge of the transport implementation is required to implement an alternate transport, or port to a different operating system.
 
 The template header describing the nRF_RPC transport APIS is ``template/nrf_rpc_tr_tmpl.h``.
-Header file ``include/rp_trans.h`` is
+Header file ``include/rp_trans.h`` is responsible for including right transport header file based on the configuration.
 
 
 Endpoints
@@ -22,7 +22,7 @@ Endpoints
 
 An important concept of the nRF_RPC transport is an `endpoint`.
 The endpoint is a destination where packets are sent.
-One endpoint is associated with a thread that is responsible for reading packet from it.
+One endpoint is associated with a thread that is responsible for reading packets from it.
 
 Endpoints on the remote side are represented by the :c:struct:`nrf_rpc_tr_remote_ep` structure.
 nRF_RPC sends packets to a remote endpoint using this structure.

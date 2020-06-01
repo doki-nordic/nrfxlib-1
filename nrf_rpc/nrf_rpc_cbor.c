@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 #define NRF_RPC_LOG_MODULE NRF_RPC_CBOR
 #include <nrf_rpc_log.h>
@@ -33,7 +33,7 @@ int _nrf_rpc_cbor_proxy_handler(const uint8_t *packet, size_t len,
 	cbor_buf_reader_init(&reader, packet, len);
 
 	if (cbor_parser_init(&reader.r, 0, &parser, &value) != CborNoError) {
-		return NRF_RPC_ERR_INVALID_PARAM;
+		return -EINVAL;
 	}
 	value.remaining = UINT32_MAX;
 
@@ -62,7 +62,7 @@ int nrf_rpc_cbor_cmd_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t cmd,
 
 cbor_error_exit:
 	NRF_RPC_CMD_DISCARD(ctx->base_ctx, ctx->packet);
-	return NRF_RPC_ERR_NO_MEM;
+	return -ENOMEM;
 }
 
 
@@ -93,15 +93,15 @@ int nrf_rpc_cbor_cmd_rsp_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t cmd,
 				!= CborNoError)
 	{
 		nrf_rpc_decoding_done();
-		return NRF_RPC_ERR_INTERNAL;
+		return -EIO;
 	}
 	rsp_packet->remaining = UINT32_MAX;
 
-	return NRF_RPC_SUCCESS;
+	return 0;
 
 encoder_error_exit:
 	NRF_RPC_CMD_DISCARD(ctx->base_ctx, ctx->packet);
-	return NRF_RPC_ERR_NO_MEM;
+	return -ENOMEM;
 }
 
 void nrf_rpc_cbor_cmd_send_noerr(struct  nrf_rpc_cbor_alloc_ctx *ctx,
@@ -114,7 +114,7 @@ void nrf_rpc_cbor_cmd_send_noerr(struct  nrf_rpc_cbor_alloc_ctx *ctx,
 
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
-		nrf_rpc_report_error(ctx->base_ctx, err);
+		nrf_rpc_report_error(ctx->base_ctx, cmd, err);
 	}
 }
 
@@ -132,7 +132,7 @@ int nrf_rpc_cbor_evt_send(struct nrf_rpc_cbor_alloc_ctx *ctx, uint8_t evt)
 
 cbor_error_exit:
 	NRF_RPC_EVT_DISCARD(ctx->base_ctx, ctx->packet);
-	return NRF_RPC_ERR_NO_MEM;
+	return -ENOMEM;
 }
 
 void nrf_rpc_cbor_evt_send_noerr(struct nrf_rpc_cbor_alloc_ctx *ctx,
@@ -144,7 +144,7 @@ void nrf_rpc_cbor_evt_send_noerr(struct nrf_rpc_cbor_alloc_ctx *ctx,
 
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled event send error %d", err);
-		nrf_rpc_report_error(ctx->base_ctx, err);
+		nrf_rpc_report_error(ctx->base_ctx, evt, err);
 	}
 }
 
@@ -162,6 +162,6 @@ int nrf_rpc_cbor_rsp_send(struct nrf_rpc_cbor_alloc_ctx *ctx)
 
 cbor_error_exit:
 	NRF_RPC_RSP_DISCARD(ctx->base_ctx, ctx->packet);
-	return NRF_RPC_ERR_NO_MEM;
+	return -ENOMEM;
 
 }

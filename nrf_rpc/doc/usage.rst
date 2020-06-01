@@ -41,6 +41,23 @@ Sample command encoder using TinyCBOR API:
 
 .. code-block:: c
 
+	/* Helper define holding maximum CBOR encoded packet length
+	 * for this sample.
+	 */
+	#define MAX_ENCODED_LEN 16
+
+	/* Defines a group that contains functions implemented in this
+	 * sample.
+	 */
+	NRF_RPC_GROUP_DEFINE(math_group, "sample_math")
+
+	/* Defines a helper structure to pass the results.
+	 */
+	struct remote_inc_result {
+		int err;
+		int output;
+	};
+
 	/* Function will remotely increment `input` by one and put the
 	 * result into `output`. Function returns 0 on success or
 	 * non-zero error code.
@@ -49,20 +66,21 @@ Sample command encoder using TinyCBOR API:
 	{
 		int err;
 		CborEncoder *encoder;
-		int result[2];
+		struct remote_inc_result result;
 		struct nrf_rpc_cbor_alloc_ctx ctx;
 
-		NRF_RPC_CBOR_CMD_ALLOC(ctx, &math_group, encoder, 16,
+		NRF_RPC_CBOR_CMD_ALLOC(ctx, &math_group, encoder,
+				       MAX_ENCODED_LEN,
 				       return NRF_RPC_NO_MEM);
 
 		cbor_encode_int(encoder, input);
 
 		err = nrf_rpc_cbor_cmd_send(&ctx, MATH_COMMAND_INC,
-					    remote_inc_rsp, result);
+					    remote_inc_rsp, &result);
 
-		if (err == NRF_RPC_SUCCESS) {
-			*output = result[0];
-			err = result[1];
+		if (err == 0) {
+			*output = result.output;
+			err = result.err;
 		}
 
 		return err;
@@ -76,23 +94,24 @@ Following code shows how this function may look like.
 	static int remote_inc_rsp(CborValue *parser, void *handler_data)
 	{
 		CborError cbor_err;
-		int *result = (int *)handler_data;
+		struct remote_inc_result *result =
+			(struct remote_inc_result *)handler_data;
 
 	 	if (!cbor_value_is_integer(parser)) {
 			goto cbor_error_exit;
 		}
 
-		cbor_err = cbor_value_get_int(parser, &result[0]);
+		cbor_err = cbor_value_get_int(parser, &result->output);
 		if (cbor_err != CborNoError) {
 			goto cbor_error_exit;
 		}
 
-		result[1] = NRF_RPC_SUCCESS;
-		return NRF_RPC_SUCCESS;
+		result->err = 0;
+		return 0;
 
 	cbor_error_exit:
-		result[1] = NRF_RPC_ERR_INVALID_PARAM;
-		return NRF_RPC_SUCCESS;
+		result->err = -EINVAL;
+		return 0;
 	}
 
 
@@ -106,6 +125,13 @@ Commands decoders must also send a response.
 Decoder associated with the examples above may be following:
 
 .. code-block:: c
+
+	/* Defines a group that contains functions implemented in this
+	 * sample. Second parameter have to be the same in both remote
+	 * and local side.
+	 */
+	NRF_RPC_GROUP_DEFINE(math_group, "sample_math")
+
 
 	static int remote_inc_handler(CborValue *packet, void* handler_data)
 	{
@@ -126,7 +152,7 @@ Decoder associated with the examples above may be following:
 		nrf_rpc_decoding_done();
 
 		if (cbor_err != CborNoError) {
-			return NRF_RPC_ERR_INTERNAL;
+			return -EIO;
 		}
 
 		/* Actual hard work is done in below line */
@@ -135,8 +161,8 @@ Decoder associated with the examples above may be following:
 
 		/* Encoding and sending the response */
 
-		NRF_RPC_CBOR_RSP_ALLOC(ctx, encoder, 16,
-				       return -NRF_RPC_ERR_NO_MEM);
+		NRF_RPC_CBOR_RSP_ALLOC(ctx, encoder, MAX_ENCODED_LEN,
+				       return -ENOMEM);
 
 		cbor_encode_int(encoder, output);
 
