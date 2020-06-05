@@ -97,12 +97,12 @@ extern "C" {
  */
 #define NRF_RPC_DUMP_DBG(memory, length, text)
 
-/**
- *@}
- */
-
 #ifdef __cplusplus
 }
 #endif
+
+/**
+ *@}
+ */
 
 #endif /* NRF_RPC_LOG_H_ */

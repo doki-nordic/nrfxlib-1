@@ -12,8 +12,8 @@ menuconfig NRF_RPC
 if NRF_RPC
 
 config NRF_RPC_CBOR
-	default y
 	bool "Add TinyCBOR layer"
+	default y
 	help
 	  Adds API that helps use of TinyCBOR library for data serialization.
 
@@ -42,5 +42,25 @@ config NRF_RPC_TR_CUSTOM_INCLUDE
 	  If NRF_RPC_TR_CUSTOM is enabled this option specifies the include
 	  file that contains custom transport layer API. Provided API must
 	  be compatible with the template header file "rp_trans_tmpl.h".
+
+config NRF_RPC_CMD_CTX_POLL_SIZE
+	int "Number of available context structures for commands"
+	default 8
+	range 2 32
+	help
+	  nRF RPC need to store some data to handle commands. Pool of contexts
+	  is created to avoid dynamic memory allocation. Setting this value too
+	  low will cause unnecessary waits for available context. Minimum value
+	  that ensures work without waits is the number of threads in both local
+	  and remote pool.
+
+config NRF_RPC_THREAD_POOL_SIZE
+	int "Number of threads in local thread pool"
+	default 3
+	range 1 32
+	help
+	  Thread pool is used to execute commands and events that arrived from
+	  the remote side. If there is no available threads then remote side
+	  will wait.
 
 endif # NRF_RPC
