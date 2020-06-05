@@ -12,8 +12,8 @@ menuconfig NRF_RPC
 if NRF_RPC
 
 config NRF_RPC_CBOR
-	default y
 	bool "Add TinyCBOR layer"
+	default y
 	help
 	  Adds API that helps use of TinyCBOR library for data serialization.
 
@@ -42,5 +42,17 @@ config NRF_RPC_TR_CUSTOM_INCLUDE
 	  If NRF_RPC_TR_CUSTOM is enabled this option specifies the include
 	  file that contains custom transport layer API. Provided API must
 	  be compatible with the template header file "rp_trans_tmpl.h".
+
+config NRF_RPC_TRANSACTION_POLL_SIZE
+	int "Number of available transactions"
+	default 16
+	help
+	  Specifies the size of transactions pool. DKTODO: More doc
+
+config NRF_RPC_THREAD_POOL_SIZE
+	int "Number of thread in local thread pool"
+	default 3
+	help
+	  DKTODO: More doc
 
 endif # NRF_RPC

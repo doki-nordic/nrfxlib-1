@@ -27,7 +27,7 @@ extern "C" {
 
 
 /* Internal definition used in the macros. */
-#define _NRF_RPC_HEADER_SIZE 2
+#define _NRF_RPC_HEADER_SIZE 4
 
 /* Forward declarations. */
 struct nrf_rpc_group;

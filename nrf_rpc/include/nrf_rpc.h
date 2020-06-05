@@ -43,6 +43,9 @@ extern "C" {
 typedef int (*nrf_rpc_handler_t)(const uint8_t *packet, size_t len,
 	void *handler_data);
 
+typedef int (*nrf_rpc_ack_handler_t)(uint8_t id, int return_value,
+	void *handler_data);
+
 
 /** @brief Command and event decoder structure.
  *
@@ -70,36 +73,9 @@ struct nrf_rpc_group {
 	uint8_t *group_id;
 	const void *cmd_array;
 	const void *evt_array;
+	nrf_rpc_ack_handler_t ack_handler;
+	void *ack_handler_data;
 };
-
-
-/** @brief Contains information about remote endpoint.
- */
-struct nrf_rpc_remote_ep {
-	struct nrf_rpc_tr_remote_ep tr_ep;
-	uint8_t current_group_id;
-};
-
-
-/** @brief Contains information about local endpoint.
- */
-struct nrf_rpc_local_ep {
-	struct nrf_rpc_tr_local_ep tr_ep;
-	struct nrf_rpc_remote_ep *default_dst;
-	uint32_t cmd_nesting_counter;
-	nrf_rpc_handler_t handler;
-	void *handler_data;
-};
-
-
-/** @brief Type of context variable for allocated resources.
- *
- * Variable of this type should be used as a context for @a NRF_RPC_CMD_ALLOC,
- * @a NRF_RPC_EVT_ALLOC and @a NRF_RPC_RPS_ALLOC. After that should be passed
- * to any of the send functions.
- */
-typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_alloc_ctx;
-
 
 /** @brief Define a group of commands and events.
  *
@@ -107,8 +83,14 @@ typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_alloc_ctx;
  * @param _strid String containing unique identifier of the group. Naming
  *               conventions the same as C symbol name. Groups on local and
  *               remote must have the same unique identifier.
+ * @param _ack_handler Handler called when ACK was received after event
+ *                     completion. Can be NULL if group does not want to receive
+ *                     ACK notifications. Packet parameter of the handler
+ *                     is a single @a int value containing event handler return
+ *                     value.
+ * @param _data    Opaque pointer for the @a _ack_handler.
  */
-#define NRF_RPC_GROUP_DEFINE(_name, _strid)				       \
+#define NRF_RPC_GROUP_DEFINE(_name, _strid, _ack_handler, _data)	       \
 	NRF_RPC_AUTO_ARR(NRF_RPC_CONCAT(_name, _cmd_array),		       \
 			      "cmd_" NRF_RPC_STRINGIFY(_name));		       \
 	NRF_RPC_AUTO_ARR(NRF_RPC_CONCAT(_name, _evt_array),		       \
@@ -119,6 +101,8 @@ typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_alloc_ctx;
 		.group_id = &NRF_RPC_CONCAT(_name, _group_id),		       \
 		.cmd_array = &NRF_RPC_CONCAT(_name, _cmd_array),	       \
 		.evt_array = &NRF_RPC_CONCAT(_name, _evt_array),	       \
+		.ack_handler = _ack_handler,				       \
+		.ack_handler_data = _data,				       \
 	}
 
 
@@ -188,16 +172,10 @@ typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_alloc_ctx;
  * @param __VA_ARGS__  Code that will be executed in case of allocation failure.
  *                     This can be e.g. return or goto statement.
  */
-#define NRF_RPC_CMD_ALLOC(_ctx, _group, _packet, _len, ...)		       \
-	(_ctx) = _nrf_rpc_cmd_prep((_group));				       \
-	nrf_rpc_tr_alloc_tx_buf((_ctx), &(_packet),			       \
-				_NRF_RPC_HEADER_SIZE + (_len));		       \
-	if (nrf_rpc_tr_alloc_failed((_packet))) {			       \
-		_nrf_rpc_cmd_alloc_error((_ctx));			       \
-		__VA_ARGS__;						       \
-	}								       \
-	(_packet) += _NRF_RPC_HEADER_SIZE
+#define NRF_RPC_ALLOC(_packet, _len)					       \
+	nrf_rpc_tr_alloc_tx_buf(&(_packet), _NRF_RPC_HEADER_SIZE + (_len));    \
 
+#define NRF_RPC_ALLOC_FAILED(_packet) nrf_rpc_tr_alloc_failed((_packet))
 
 /** @brief Discards resources allocated for a new command.
  *
@@ -207,83 +185,7 @@ typedef struct nrf_rpc_tr_remote_ep *nrf_rpc_alloc_ctx;
  * @param _ctx    Context that was previously allocated to send the command.
  * @param _packet Packet that was previously allocated to send the command.
  */
-#define NRF_RPC_CMD_DISCARD(_ctx, _packet)				       \
-	_nrf_rpc_cmd_unprep();						       \
-	nrf_rpc_tr_free_tx_buf((_ctx), (_packet))
-
-
-/** @brief Allocates resources for a new event.
- *
- * Macro may allocate some variables on stack, so it should be used at top level
- * of a function.
- *
- * @param[out] _ctx    Variable of type `nrf_rpc_evt_ctx_t` that will hold
- *                     allocated resources.
- * @param _group       Group that the decoder will belong to created with
- *                     @ref NRF_RPC_GROUP_DEFINE().
- * @param[out] _packet Variable of type `uint8_t *` that will hold pointer to
- *                     newly allocated packet buffer.
- * @param      _len    Requested length of the packet.
- * @param __VA_ARGS__  Code that will be executed in case of allocation failure.
- *                     This can be e.g. return or goto statement.
- */
-#define NRF_RPC_EVT_ALLOC(_ctx, _group, _packet, _len, ...)		       \
-	(_ctx) = _nrf_rpc_evt_prep((_group));				       \
-	nrf_rpc_tr_alloc_tx_buf((_ctx), &(_packet),			       \
-				_NRF_RPC_HEADER_SIZE + (_len));		       \
-	if (nrf_rpc_tr_alloc_failed((_packet))) {			       \
-		_nrf_rpc_evt_alloc_error((_ctx));			       \
-		__VA_ARGS__;						       \
-	}								       \
-	(_packet) += _NRF_RPC_HEADER_SIZE
-
-
-/** @brief Discards resources allocated for a new event.
- *
- * This macro should be used if an event was allocated, but it will not be send
- * with @a NRF_RPC_EVT_SEND.
- *
- * @param _ctx    Context that was previously allocated to send the event.
- * @param _packet Packet that was previously allocated to send the event.
- */
-#define NRF_RPC_EVT_DISCARD(_ctx, _packet)				       \
-	_nrf_rpc_evt_unprep((_ctx));					       \
-	nrf_rpc_tr_free_tx_buf((_ctx), (_packet))
-
-
-/** @brief Allocates resources for a response.
- *
- * Macro may allocate some variables on stack, so it should be used at top level
- * of a function.
- *
- * @param[out] _ctx    Variable of type `nrf_rpc_rsp_ctx_t` that will hold
- *                     allocated resources.
- * @param[out] _packet Variable of type `uint8_t *` that will hold pointer to
- *                     newly allocated packet buffer.
- * @param      _len    Requested length of the packet.
- * @param __VA_ARGS__  Code that will be executed in case of allocation failure.
- *                     This can be e.g. return or goto statement.
- */
-#define NRF_RPC_RSP_ALLOC(_ctx, _packet, _len, ...)			       \
-	(_ctx) = _nrf_rpc_rsp_prep();					       \
-	nrf_rpc_tr_alloc_tx_buf((_ctx), &(_packet),			       \
-				_NRF_RPC_HEADER_SIZE + (_len));		       \
-	if (nrf_rpc_tr_alloc_failed((_packet))) {			       \
-		__VA_ARGS__;						       \
-	}								       \
-	(_packet) += _NRF_RPC_HEADER_SIZE
-
-
-/** @brief Discards resources allocated for a response.
- *
- * This macro should be used if an response was allocated, but it will not be
- * send with @a NRF_RPC_RSP_SEND.
- *
- * @param _ctx    Context that was previously allocated to send the response.
- * @param _packet Packet that was previously allocated to send the response.
- */
-#define NRF_RPC_RSP_DISCARD(_ctx, _packet)				       \
-	nrf_rpc_tr_free_tx_buf((_ctx), (_packet))
+#define NRF_RPC_CMD_DISCARD(_packet) nrf_rpc_tr_free_tx_buf((_packet))
 
 
 /** @brief Initialize the nRF RPC
@@ -305,7 +207,7 @@ int nrf_rpc_init(void);
  * @param handler_data Opaque pointer that will be passed to @a handler.
  * @returns            0 or negative error code.
  */
-int nrf_rpc_cmd_send(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
+int nrf_rpc_cmd_send(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
 		     size_t len, nrf_rpc_handler_t handler, void *handler_data);
 
 
@@ -328,7 +230,7 @@ int nrf_rpc_cmd_send(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
  * @param[out] rsp_len    Response packet length.
  * @returns               0 or negative error code.
  */
-int nrf_rpc_cmd_rsp_send(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
+int nrf_rpc_cmd_rsp_send(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
 			 size_t len, const uint8_t **rsp_packet,
 			 size_t *rsp_len);
 
@@ -342,7 +244,7 @@ int nrf_rpc_cmd_rsp_send(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
  *
  * See @a nrf_rpc_cmd_send for more details.
  */
-void nrf_rpc_cmd_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
+void nrf_rpc_cmd_send_noerr(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
 			    size_t len, nrf_rpc_handler_t handler,
 			    void *handler_data);
 
@@ -360,8 +262,7 @@ void nrf_rpc_cmd_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t cmd, uint8_t *packet,
  * @param len       Length of the packet. Can be smaller than allocated.
  * @returns         0 or negative error code.
  */
-int nrf_rpc_evt_send(nrf_rpc_alloc_ctx ctx, uint8_t evt, uint8_t *packet,
-		     size_t len);
+int nrf_rpc_evt_send(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet, size_t len);
 
 
 /** @brief Send an event passing any errors to an error handler.
@@ -373,8 +274,7 @@ int nrf_rpc_evt_send(nrf_rpc_alloc_ctx ctx, uint8_t evt, uint8_t *packet,
  *
  * See @a nrf_rpc_evt_send for more details.
  */
-void nrf_rpc_evt_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t evt, uint8_t *packet,
-			    size_t len);
+void nrf_rpc_evt_send_noerr(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet, size_t len);
 
 
 /** @brief Send a response to a command.
@@ -390,7 +290,7 @@ void nrf_rpc_evt_send_noerr(nrf_rpc_alloc_ctx ctx, uint8_t evt, uint8_t *packet,
  * @param len       Length of the packet. Can be smaller than allocated.
  * @returns         0 or negative error code.
  */
-int nrf_rpc_rsp_send(nrf_rpc_alloc_ctx ctx, uint8_t *packet, size_t len);
+int nrf_rpc_rsp_send(uint8_t *packet, size_t len);
 
 
 /** @brief Indicate that decoding of the input data is done.
@@ -424,9 +324,7 @@ void nrf_rpc_decoding_done(void);
  * @param code         Error code
  * @param from_remote  If error occurred on the remote side.
  */
-void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
-			   struct nrf_rpc_tr_remote_ep *tr_remote_ep,
-			   uint8_t cmd_evt_id, int code, bool from_remote);
+void nrf_rpc_error_handler(int code, bool from_remote);
 
 
 /** @brief Function to pass errors from encoder function to
@@ -438,7 +336,7 @@ void nrf_rpc_error_handler(struct nrf_rpc_tr_local_ep *tr_local_ep,
  *                   @ref NRF_RPC_UNKNOWN_ID.
  * @param code       Error code
  */
-void nrf_rpc_report_error(nrf_rpc_alloc_ctx ctx, uint8_t cmd_evt_id, int code);
+void nrf_rpc_report_error(int code);
 
 
 /**
