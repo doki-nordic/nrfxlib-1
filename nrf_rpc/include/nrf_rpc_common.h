@@ -151,20 +151,23 @@ extern "C" {
 	(((_type *)((const uint8_t *const *)(_array_ptr) + 1))[_index])
 
 /* Error codes definitions if they are not defined by the platform */
+#ifndef ENOENT
+#define ENOENT 2
+#endif
 #ifndef EIO
 #define EIO 5
-#endif
-#ifndef EINVAL
-#define EINVAL 22
 #endif
 #ifndef ENOMEM
 #define ENOMEM 12
 #endif
-#ifndef EPROTO
-#define EPROTO 71
+#ifndef EFAULT
+#define EFAULT 14
 #endif
-#ifndef ENOSYS
-#define ENOSYS 88
+#ifndef EINVAL
+#define EINVAL 22
+#endif
+#ifndef EBADMSG
+#define EBADMSG 77
 #endif
 
 /**
