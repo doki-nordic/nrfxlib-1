@@ -13,48 +13,8 @@
 
 #include "nrf_rpc.h"
 #include "nrf_rpc_tr.h"
+#include "nrf_rpc_os.h"
 
-////////////////////////////////////////////////
-
-struct nrf_rpc_thread
-{
-	int __data__;
-};
-
-struct nrf_rpc_thread_event
-{
-	int __data__;
-};
-
-struct nrf_rpc_thread_msg
-{
-	int __data__;
-};
-
-typedef void (*nrf_rpc_thread_work_t)(void* data, size_t len);
-
-int nrf_rpc_thread_init();
-
-int nrf_rpc_thread_pool_execute(nrf_rpc_thread_work_t work, void* data, size_t len);
-
-int nrf_rpc_thread_set_event(struct nrf_rpc_thread_event* event);
-int nrf_rpc_thread_wait_event(struct nrf_rpc_thread_event* event);
-
-int nrf_rpc_thread_set_msg(struct nrf_rpc_thread_msg* msg, void* data, size_t len);
-int nrf_rpc_thread_get_msg(struct nrf_rpc_thread_msg* msg, void** data, size_t* len);
-int nrf_rpc_thread_init_msg(struct nrf_rpc_thread_msg* msg);
-
-void* nrf_rpc_thread_get_data(void);
-void nrf_rpc_thread_set_data(void* data);
-
-int nrf_rpc_thread_transport_reserve();
-void nrf_rpc_thread_transport_release(int number);
-
-int nrf_rpc_thread_remote_reserve();
-void nrf_rpc_thread_remote_release();
-int nrf_rpc_thread_remote_set(int count);
-
-////////////////////////////////////////////////
 
 struct nrf_rpc_transaction_ctx {
 	uint8_t id;
@@ -63,7 +23,7 @@ struct nrf_rpc_transaction_ctx {
 	bool response_sent;
 	nrf_rpc_handler_t handler;
 	void* handler_data;
-	struct nrf_rpc_thread_msg recv_msg;
+	struct nrf_rpc_os_msg recv_msg;
 };
 
 struct nrf_rpc_transaction_ctx transaction_pool[CONFIG_NRF_RPC_TRANSACTION_POLL_SIZE];
@@ -87,64 +47,14 @@ enum {
 	PACKET_TYPE_CMD  = 0x80, // 1 -> 4, 1 -> U
 };
 
-struct nrf_rpc_thread_event decode_done_event;
-
-/*
-
-CMD
-	byte 0:
-		bit 7: packet type,
-		bits 6-0: source context,
-	byte 1: command/event id
-	byte 2: destination context
-	byte 3: group id
-	... payload
-
-EVT
-	byte 0: packet type,
-	byte 1: command/event id
-	byte 2: [unused]
-	byte 3: group id
-	... payload
-
-RSP
-	byte 0: packet type
-	byte 1: 0 - valid, 1 - missing
-	byte 2: destination context
-	byte 3: [unused]
-	... payload
-
-ACK
-	byte 0: packet type
-	byte 1: command/event id
-	byte 2: [unused]
-	byte 3: group id
-	... return_value
-
-ERR
-	byte 0: packet type
-	byte 1: command/event id
-	byte 2: destination context
-	byte 3: group id
-	... error information
-
-INIT
-	byte 0: packet type
-	byte 1: number of remote threads
-	byte 2: [unused]
-	byte 3: group id max
-	... error information
-
-*/
-
-
+struct nrf_rpc_os_event decode_done_event;
 
 
 static int alloc_transaction_ctx(struct nrf_rpc_transaction_ctx **ctx)
 {
 	int index;
 
-	index = nrf_rpc_thread_transport_reserve();
+	index = nrf_rpc_os_ctx_pool_reserve();
 	if (index < 0) {
 		return index;
 	}
@@ -153,10 +63,11 @@ static int alloc_transaction_ctx(struct nrf_rpc_transaction_ctx **ctx)
 
 	*ctx = &transaction_pool[index];
 	(*ctx)->handler = NULL;
+	NRF_RPC_WRN("------- %d = %d", (*ctx)->remote_id, ID_UNKNOWN);
 	(*ctx)->remote_id = ID_UNKNOWN;
 	(*ctx)->use_count = 1;
 
-	nrf_rpc_thread_set_data(*ctx);
+	nrf_rpc_os_tls_set(*ctx);
 
 	return 0;
 }
@@ -171,11 +82,13 @@ static struct nrf_rpc_transaction_ctx *get_transaction_ctx_by_id(uint8_t id)
 
 static int get_transaction_ctx(struct nrf_rpc_transaction_ctx **ctx, bool alloc_if_needed)
 {
-	*ctx = nrf_rpc_thread_get_data();
-	if (*ctx == NULL && alloc_if_needed) {
-		return alloc_transaction_ctx(ctx);
-	} else {
-		(*ctx)->use_count++;
+	*ctx = nrf_rpc_os_tls_get();
+	if (alloc_if_needed) {
+		if (*ctx == NULL) {
+			return alloc_transaction_ctx(ctx);
+		} else {
+			(*ctx)->use_count++;
+		}
 	}
 	return 0;
 }
@@ -184,7 +97,8 @@ static void release_transaction_ctx(struct nrf_rpc_transaction_ctx *ctx)
 {
 	ctx->use_count--;
 	if (ctx->use_count == 0) {
-		nrf_rpc_thread_set_data(NULL);
+		nrf_rpc_os_tls_set(NULL);
+		nrf_rpc_os_ctx_pool_release(ctx->id);
 	}
 }
 
@@ -321,6 +235,7 @@ static int handler_execute(uint8_t id, const uint8_t *packet, size_t len,
 				NRF_RPC_ERR("Command or event handler "
 					    "returned an error %d", err);
 			}
+			NRF_RPC_WRN("------ EXECUTED");
 			return err;
 		}
 	}
@@ -405,6 +320,8 @@ static int parse_incoming_packet(struct nrf_rpc_transaction_ctx *transaction_ctx
 			}
 			transaction_ctx = allocated_ctx;
 		}
+		NRF_RPC_WRN("------- %d = %d", transaction_ctx->remote_id, src);
+		transaction_ctx->remote_id = src;
 		transaction_ctx->response_sent = false;
 		NRF_RPC_DBG("Executing command 0x%02X from group 0x%02X", id,
 			    *group->group_id);
@@ -415,15 +332,18 @@ static int parse_incoming_packet(struct nrf_rpc_transaction_ctx *transaction_ctx
 			/* Report missing response to the caller to avoid
 			 * infinite wait for a response.
 			 */
+			NRF_RPC_WRN("------- %d", transaction_ctx->remote_id);
 			send_result = send_simple(transaction_ctx->remote_id,
 						  PACKET_TYPE_RSP,
 						  RSP_ID_MISSING, // DKTODO: receive part
 						  ID_UNKNOWN, NULL, 0);
 		}
+		NRF_RPC_WRN("------- DONE HANDLER");
 		transaction_ctx->response_sent = false;
 		if (allocated_ctx != NULL) {
 			release_transaction_ctx(allocated_ctx);
 		}
+		NRF_RPC_WRN("------- RELEASED");
 
 	} else if (type == PACKET_TYPE_EVT) {
 
@@ -497,12 +417,17 @@ static void receive_handler(const uint8_t *packet, int len)
 	const struct nrf_rpc_group *group;
 	int err;
 	struct nrf_rpc_transaction_ctx *transaction_ctx;
-	
+
 
 	err = decode_header(packet, len, &dst, &src, &type, &id, &group_id);
 	if (err < 0) {
+		NRF_RPC_ERR("Invalid header in received packet.");
 		goto error_exit;
 	}
+
+	NRF_RPC_DBG("Received %d bytes packet from %d to %d, type 0x%02X, "
+		    "cmd/evt/cnt 0x%02X, grp %d", len, src, dst, type, id,
+		    group_id);
 
 	if (type == PACKET_TYPE_CMD && dst == ID_UNKNOWN) {
 		/* In this place command behaves almost the same as an event if
@@ -515,11 +440,11 @@ static void receive_handler(const uint8_t *packet, int len)
 	switch (type)
 	{
 	case PACKET_TYPE_EVT: /* or PACKET_TYPE_CMD with unknown destination */
-		err = nrf_rpc_thread_pool_execute(execute_packet, (void *)packet, len);
+		err = nrf_rpc_os_thread_pool_send(execute_packet, (void *)packet, len);
 		if (err < 0) {
 			goto error_exit;
 		}
-		err = nrf_rpc_thread_wait_event(&decode_done_event);
+		err = nrf_rpc_os_event_wait(&decode_done_event);
 		if (err < 0) {
 			goto error_exit;
 		}
@@ -533,16 +458,16 @@ static void receive_handler(const uint8_t *packet, int len)
 		}
 		if (transaction_ctx->handler != NULL && type == PACKET_TYPE_RSP) {
 			err = transaction_ctx->handler(&packet[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, transaction_ctx->handler_data);
-			err = nrf_rpc_thread_set_msg(&transaction_ctx->recv_msg, NULL, err);
+			err = nrf_rpc_os_msg_set(&transaction_ctx->recv_msg, NULL, err);
 			if (err < 0) {
 				goto error_exit;
 			}
 		} else {
-			err = nrf_rpc_thread_set_msg(&transaction_ctx->recv_msg, (void *)packet, len);
+			err = nrf_rpc_os_msg_set(&transaction_ctx->recv_msg, (void *)packet, len);
 			if (err < 0) {
 				goto error_exit;
 			}
-			err = nrf_rpc_thread_wait_event(&decode_done_event);
+			err = nrf_rpc_os_event_wait(&decode_done_event);
 			if (err < 0) {
 				goto error_exit;
 			}
@@ -550,7 +475,7 @@ static void receive_handler(const uint8_t *packet, int len)
 		break;
 
 	case PACKET_TYPE_ACK:
-		nrf_rpc_thread_remote_release();
+		nrf_rpc_os_remote_release();
 
 		group = group_from_id(group_id);
 
@@ -568,7 +493,7 @@ static void receive_handler(const uint8_t *packet, int len)
 		break;
 
 	case PACKET_TYPE_INIT:
-		err = nrf_rpc_thread_remote_set(id);
+		err = nrf_rpc_os_remote_count(id);
 		break;
 
 	default:
@@ -592,7 +517,7 @@ error_exit:
 
 void nrf_rpc_decoding_done(void)
 {
-	nrf_rpc_thread_set_event(&decode_done_event);
+	nrf_rpc_os_event_set(&decode_done_event);
 }
 
 
@@ -624,7 +549,7 @@ static int wait_for_response(struct nrf_rpc_transaction_ctx *transaction_ctx,
 	NRF_RPC_DBG("Waiting for response");
 
 	do {
-		err = nrf_rpc_thread_get_msg(&transaction_ctx->recv_msg, &msg_data, &msg_len);
+		err = nrf_rpc_os_msg_get(&transaction_ctx->recv_msg, &msg_data, &msg_len);
 		if (err < 0) {
 			return err;
 		}
@@ -685,6 +610,7 @@ static int cmd_send_common(const struct nrf_rpc_group *group,
 		return err;
 	}
 
+	NRF_RPC_WRN("------- %d", transaction_ctx->remote_id);
 	encode_cmd_header(full_packet, transaction_ctx->remote_id, transaction_ctx->id, cmd & 0xFF, *group->group_id);
 
 	old_handler = transaction_ctx->handler;
@@ -760,12 +686,12 @@ int nrf_rpc_evt_send(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *pa
 	NRF_RPC_DBG("Sending event 0x%02X from group 0x%02X", evt,
 		    *group->group_id);
 
-	nrf_rpc_thread_remote_reserve();
+	nrf_rpc_os_remote_reserve();
 
 	err = nrf_rpc_tr_send(full_packet, len + _NRF_RPC_HEADER_SIZE);
 
 	if (err < 0) {
-		nrf_rpc_thread_remote_release();
+		nrf_rpc_os_remote_release();
 	}
 
 	return err;
@@ -799,7 +725,8 @@ int nrf_rpc_rsp_send(uint8_t *packet, size_t len)
 	if (err < 0) {
 		return err;
 	}
-	encode_header(packet, transaction_ctx->remote_id, PACKET_TYPE_RSP, RSP_ID_VALID, ID_UNKNOWN);
+	NRF_RPC_WRN("------- %d", transaction_ctx->remote_id);
+	encode_header(full_packet, transaction_ctx->remote_id, PACKET_TYPE_RSP, RSP_ID_VALID, ID_UNKNOWN);
 
 	NRF_RPC_DBG("Sending response");
 
@@ -808,7 +735,7 @@ int nrf_rpc_rsp_send(uint8_t *packet, size_t len)
 	if (err >= 0) {
 		transaction_ctx->response_sent = true;
 	}
-
+	NRF_RPC_WRN("------ SEND DONE");
 	return err;
 }
 
@@ -824,7 +751,7 @@ int nrf_rpc_init(void)
 	const struct nrf_rpc_group *group;
 	uint8_t group_id = 0;
 
-	NRF_RPC_DBG("Initializing nRF RPC Module");
+	NRF_RPC_DBG("Initializing nRF RPC module");
 
 	for (NRF_RPC_AUTO_ARR_FOR(iter, group, &nrf_rpc_groups_array,
 				 const struct nrf_rpc_group)) {
@@ -840,14 +767,16 @@ int nrf_rpc_init(void)
 
 	memset(&transaction_pool, 0, sizeof(transaction_pool));
 
-	err = nrf_rpc_thread_init();
+	err = nrf_rpc_os_init();
 	if (err < 0) {
 		return err;
 	}
 
+	nrf_rpc_os_event_init(&decode_done_event);
+
 	for (i = 0; i < CONFIG_NRF_RPC_TRANSACTION_POLL_SIZE; i++) {
 		transaction_pool[i].id = i;
-		nrf_rpc_thread_init_msg(&transaction_pool[i].recv_msg);
+		nrf_rpc_os_msg_init(&transaction_pool[i].recv_msg);
 	}
 
 	err = nrf_rpc_tr_init(receive_handler);
@@ -857,6 +786,8 @@ int nrf_rpc_init(void)
 
 	err = send_simple(ID_UNKNOWN, PACKET_TYPE_INIT,
 			  CONFIG_NRF_RPC_THREAD_POOL_SIZE, ID_UNKNOWN, NULL, 0);
+
+	NRF_RPC_DBG("Done initializing nRF RPC module");
 
 	return err;
 }

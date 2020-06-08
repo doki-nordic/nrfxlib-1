@@ -174,8 +174,10 @@ struct nrf_rpc_group {
  */
 #define NRF_RPC_ALLOC(_packet, _len)					       \
 	nrf_rpc_tr_alloc_tx_buf(&(_packet), _NRF_RPC_HEADER_SIZE + (_len));    \
+	*(uint8_t **)&(_packet) += _NRF_RPC_HEADER_SIZE
 
-#define NRF_RPC_ALLOC_FAILED(_packet) nrf_rpc_tr_alloc_failed((_packet))
+#define NRF_RPC_ALLOC_FAILED(_packet)					       \
+	nrf_rpc_tr_alloc_failed((&_packet[-_NRF_RPC_HEADER_SIZE]))
 
 /** @brief Discards resources allocated for a new command.
  *
