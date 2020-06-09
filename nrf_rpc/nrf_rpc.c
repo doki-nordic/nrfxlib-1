@@ -1,4 +1,3 @@
-#if 1
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
@@ -15,8 +14,9 @@
 #include "nrf_rpc_tr.h"
 #include "nrf_rpc_os.h"
 
-
-struct nrf_rpc_transaction_ctx {
+/**
+ */
+struct nrf_rpc_cmd_ctx {
 	uint8_t id;
 	uint8_t remote_id;
 	uint8_t use_count;
@@ -26,7 +26,8 @@ struct nrf_rpc_transaction_ctx {
 	struct nrf_rpc_os_msg recv_msg;
 };
 
-struct nrf_rpc_transaction_ctx transaction_pool[CONFIG_NRF_RPC_TRANSACTION_POLL_SIZE];
+static struct nrf_rpc_cmd_ctx transaction_pool[CONFIG_NRF_RPC_TRANSACTION_POLL_SIZE];
+static uint32_t groups_check_sum;
 
 #define ID_UNKNOWN 0xFF
 
@@ -50,7 +51,7 @@ enum {
 struct nrf_rpc_os_event decode_done_event;
 
 
-static int alloc_transaction_ctx(struct nrf_rpc_transaction_ctx **ctx)
+static int alloc_cmd_ctx(struct nrf_rpc_cmd_ctx **ctx)
 {
 	int index;
 
@@ -72,7 +73,7 @@ static int alloc_transaction_ctx(struct nrf_rpc_transaction_ctx **ctx)
 	return 0;
 }
 
-static struct nrf_rpc_transaction_ctx *get_transaction_ctx_by_id(uint8_t id)
+static struct nrf_rpc_cmd_ctx *get_cmd_ctx_by_id(uint8_t id)
 {
 	if (id >= CONFIG_NRF_RPC_TRANSACTION_POLL_SIZE) {
 		return NULL;
@@ -80,12 +81,12 @@ static struct nrf_rpc_transaction_ctx *get_transaction_ctx_by_id(uint8_t id)
 	return &transaction_pool[id];
 }
 
-static int get_transaction_ctx(struct nrf_rpc_transaction_ctx **ctx, bool alloc_if_needed)
+static int get_cmd_ctx(struct nrf_rpc_cmd_ctx **ctx, bool alloc_if_needed)
 {
 	*ctx = nrf_rpc_os_tls_get();
 	if (alloc_if_needed) {
 		if (*ctx == NULL) {
-			return alloc_transaction_ctx(ctx);
+			return alloc_cmd_ctx(ctx);
 		} else {
 			(*ctx)->use_count++;
 		}
@@ -93,7 +94,7 @@ static int get_transaction_ctx(struct nrf_rpc_transaction_ctx **ctx, bool alloc_
 	return 0;
 }
 
-static void release_transaction_ctx(struct nrf_rpc_transaction_ctx *ctx)
+static void release_cmd_ctx(struct nrf_rpc_cmd_ctx *ctx)
 {
 	ctx->use_count--;
 	if (ctx->use_count == 0) {
@@ -272,7 +273,7 @@ static const struct nrf_rpc_group *group_from_id(uint8_t group_id)
  *         PACKET_TYPE_RSP if packet contains a response and response_expected
  *         was true. Negative error code on failure.
  */
-static int parse_incoming_packet(struct nrf_rpc_transaction_ctx *transaction_ctx,
+static int parse_incoming_packet(struct nrf_rpc_cmd_ctx *cmd_ctx,
 				 const uint8_t *packet, size_t len,
 				 bool response_expected)
 {
@@ -284,7 +285,7 @@ static int parse_incoming_packet(struct nrf_rpc_transaction_ctx *transaction_ctx
 	uint8_t id;
 	uint8_t group_id;
 	const struct nrf_rpc_group *group = NULL;
-	struct nrf_rpc_transaction_ctx *allocated_ctx = NULL;
+	struct nrf_rpc_cmd_ctx *allocated_ctx = NULL;
 
 	/* Validate required parameters */
 	NRF_RPC_ASSERT(valid_packet(packet));
@@ -313,35 +314,35 @@ static int parse_incoming_packet(struct nrf_rpc_transaction_ctx *transaction_ctx
 
 	if (type == PACKET_TYPE_CMD) {
 
-		if (transaction_ctx == NULL) {
-			err = alloc_transaction_ctx(&allocated_ctx);
+		if (cmd_ctx == NULL) {
+			err = alloc_cmd_ctx(&allocated_ctx);
 			if (err < 0) {
 				goto decode_done_and_exit;
 			}
-			transaction_ctx = allocated_ctx;
+			cmd_ctx = allocated_ctx;
 		}
-		NRF_RPC_WRN("------- %d = %d", transaction_ctx->remote_id, src);
-		transaction_ctx->remote_id = src;
-		transaction_ctx->response_sent = false;
+		NRF_RPC_WRN("------- %d = %d", cmd_ctx->remote_id, src);
+		cmd_ctx->remote_id = src;
+		cmd_ctx->response_sent = false;
 		NRF_RPC_DBG("Executing command 0x%02X from group 0x%02X", id,
 			    *group->group_id);
 		err = handler_execute(id, &packet[_NRF_RPC_HEADER_SIZE],
 					 len - _NRF_RPC_HEADER_SIZE,
 					 group->cmd_array);
-		if (!transaction_ctx->response_sent) {
+		if (!cmd_ctx->response_sent) {
 			/* Report missing response to the caller to avoid
 			 * infinite wait for a response.
 			 */
-			NRF_RPC_WRN("------- %d", transaction_ctx->remote_id);
-			send_result = send_simple(transaction_ctx->remote_id,
+			NRF_RPC_WRN("------- %d", cmd_ctx->remote_id);
+			send_result = send_simple(cmd_ctx->remote_id,
 						  PACKET_TYPE_RSP,
 						  RSP_ID_MISSING, // DKTODO: receive part
 						  ID_UNKNOWN, NULL, 0);
 		}
 		NRF_RPC_WRN("------- DONE HANDLER");
-		transaction_ctx->response_sent = false;
+		cmd_ctx->response_sent = false;
 		if (allocated_ctx != NULL) {
-			release_transaction_ctx(allocated_ctx);
+			release_cmd_ctx(allocated_ctx);
 		}
 		NRF_RPC_WRN("------- RELEASED");
 
@@ -416,7 +417,7 @@ static void receive_handler(const uint8_t *packet, int len)
 	uint8_t group_id;
 	const struct nrf_rpc_group *group;
 	int err;
-	struct nrf_rpc_transaction_ctx *transaction_ctx;
+	struct nrf_rpc_cmd_ctx *cmd_ctx;
 
 
 	err = decode_header(packet, len, &dst, &src, &type, &id, &group_id);
@@ -452,18 +453,18 @@ static void receive_handler(const uint8_t *packet, int len)
 
 	case PACKET_TYPE_CMD: /* with known destination */
 	case PACKET_TYPE_RSP:
-		transaction_ctx = get_transaction_ctx_by_id(dst);
-		if (transaction_ctx == NULL) {
+		cmd_ctx = get_cmd_ctx_by_id(dst);
+		if (cmd_ctx == NULL) {
 			goto error_exit;
 		}
-		if (transaction_ctx->handler != NULL && type == PACKET_TYPE_RSP) {
-			err = transaction_ctx->handler(&packet[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, transaction_ctx->handler_data);
-			err = nrf_rpc_os_msg_set(&transaction_ctx->recv_msg, NULL, err);
+		if (cmd_ctx->handler != NULL && type == PACKET_TYPE_RSP) {
+			err = cmd_ctx->handler(&packet[_NRF_RPC_HEADER_SIZE], len - _NRF_RPC_HEADER_SIZE, cmd_ctx->handler_data);
+			err = nrf_rpc_os_msg_set(&cmd_ctx->recv_msg, NULL, err);
 			if (err < 0) {
 				goto error_exit;
 			}
 		} else {
-			err = nrf_rpc_os_msg_set(&transaction_ctx->recv_msg, (void *)packet, len);
+			err = nrf_rpc_os_msg_set(&cmd_ctx->recv_msg, (void *)packet, len);
 			if (err < 0) {
 				goto error_exit;
 			}
@@ -494,6 +495,15 @@ static void receive_handler(const uint8_t *packet, int len)
 
 	case PACKET_TYPE_INIT:
 		err = nrf_rpc_os_remote_count(id);
+		if (len >= _NRF_RPC_HEADER_SIZE + sizeof(uint32_t) &&
+		    *(uint32_t*)(&packet[_NRF_RPC_HEADER_SIZE]) !=
+		    groups_check_sum) {
+			NRF_RPC_ERR("Remote groups does not match local");
+			NRF_RPC_ASSERT(0);
+			nrf_rpc_os_fault();
+		} else {
+			NRF_RPC_DBG("Groups checksum matching");
+		}
 		break;
 
 	default:
@@ -534,7 +544,7 @@ void nrf_rpc_decoding_done(void)
  * @param[out] rsp_len    If not NULL contains response packet length.
  * @return 0 on success or negative error code.
  */
-static int wait_for_response(struct nrf_rpc_transaction_ctx *transaction_ctx,
+static int wait_for_response(struct nrf_rpc_cmd_ctx *cmd_ctx,
 			     const uint8_t **rsp_packet, size_t *rsp_len)
 {
 	int err;
@@ -544,12 +554,12 @@ static int wait_for_response(struct nrf_rpc_transaction_ctx *transaction_ctx,
 	void *msg_data;
 	size_t msg_len;
 
-	NRF_RPC_ASSERT(transaction_ctx != NULL);
+	NRF_RPC_ASSERT(cmd_ctx != NULL);
 
 	NRF_RPC_DBG("Waiting for response");
 
 	do {
-		err = nrf_rpc_os_msg_get(&transaction_ctx->recv_msg, &msg_data, &msg_len);
+		err = nrf_rpc_os_msg_get(&cmd_ctx->recv_msg, &msg_data, &msg_len);
 		if (err < 0) {
 			return err;
 		}
@@ -561,7 +571,7 @@ static int wait_for_response(struct nrf_rpc_transaction_ctx *transaction_ctx,
 			return len;
 		}
 
-		type = parse_incoming_packet(transaction_ctx, packet, len, (rsp_packet != NULL));
+		type = parse_incoming_packet(cmd_ctx, packet, len, (rsp_packet != NULL));
 
 		if (type < 0) {
 			return type;
@@ -590,7 +600,7 @@ static int cmd_send_common(const struct nrf_rpc_group *group,
 	void *handler_data = NULL;
 	const uint8_t **rsp_packet = NULL;
 	size_t *rsp_len = NULL;
-	struct nrf_rpc_transaction_ctx *transaction_ctx;
+	struct nrf_rpc_cmd_ctx *cmd_ctx;
 
 	NRF_RPC_ASSERT(valid_packet(packet));
 	NRF_RPC_ASSERT(ptr1 != NULL);
@@ -604,19 +614,19 @@ static int cmd_send_common(const struct nrf_rpc_group *group,
 		handler_data = ptr2;
 	}
 
-	err = get_transaction_ctx(&transaction_ctx, true);
+	err = get_cmd_ctx(&cmd_ctx, true);
 	if (err < 0) {
 		nrf_rpc_tr_free_tx_buf(full_packet);
 		return err;
 	}
 
-	NRF_RPC_WRN("------- %d", transaction_ctx->remote_id);
-	encode_cmd_header(full_packet, transaction_ctx->remote_id, transaction_ctx->id, cmd & 0xFF, *group->group_id);
+	NRF_RPC_WRN("------- %d", cmd_ctx->remote_id);
+	encode_cmd_header(full_packet, cmd_ctx->remote_id, cmd_ctx->id, cmd & 0xFF, *group->group_id);
 
-	old_handler = transaction_ctx->handler;
-	old_handler_data = transaction_ctx->handler_data;
-	transaction_ctx->handler = handler;
-	transaction_ctx->handler_data = handler_data;
+	old_handler = cmd_ctx->handler;
+	old_handler_data = cmd_ctx->handler_data;
+	cmd_ctx->handler = handler;
+	cmd_ctx->handler_data = handler_data;
 
 	NRF_RPC_DBG("Sending command 0x%02X from group 0x%02X", cmd,
 		   *group->group_id);
@@ -624,13 +634,13 @@ static int cmd_send_common(const struct nrf_rpc_group *group,
 	err = nrf_rpc_tr_send(full_packet, len + _NRF_RPC_HEADER_SIZE);
 
 	if (err >= 0) {
-		err = wait_for_response(transaction_ctx, rsp_packet, rsp_len);
+		err = wait_for_response(cmd_ctx, rsp_packet, rsp_len);
 	}
 
-	transaction_ctx->handler = old_handler;
-	transaction_ctx->handler_data = old_handler_data;
+	cmd_ctx->handler = old_handler;
+	cmd_ctx->handler_data = old_handler_data;
 
-	release_transaction_ctx(transaction_ctx);
+	release_cmd_ctx(cmd_ctx);
 
 	if ((cmd & CMD_FLAG_WITH_RSP) && (err < 0)) {
 		nrf_rpc_decoding_done();
@@ -681,7 +691,7 @@ int nrf_rpc_evt_send(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *pa
 	NRF_RPC_ASSERT(group != NULL);
 	NRF_RPC_ASSERT(valid_packet(packet));
 
-	encode_header(packet, ID_UNKNOWN, PACKET_TYPE_EVT, evt, *group->group_id);
+	encode_header(full_packet, ID_UNKNOWN, PACKET_TYPE_EVT, evt, *group->group_id);
 
 	NRF_RPC_DBG("Sending event 0x%02X from group 0x%02X", evt,
 		    *group->group_id);
@@ -716,24 +726,24 @@ void nrf_rpc_evt_send_noerr(const struct nrf_rpc_group *group, uint8_t evt, uint
 int nrf_rpc_rsp_send(uint8_t *packet, size_t len)
 {
 	int err;
-	struct nrf_rpc_transaction_ctx *transaction_ctx;
+	struct nrf_rpc_cmd_ctx *cmd_ctx;
 	uint8_t *full_packet = &packet[-_NRF_RPC_HEADER_SIZE];
 
 	NRF_RPC_ASSERT(valid_packet(packet));
 
-	err = get_transaction_ctx(&transaction_ctx, false);
+	err = get_cmd_ctx(&cmd_ctx, false);
 	if (err < 0) {
 		return err;
 	}
-	NRF_RPC_WRN("------- %d", transaction_ctx->remote_id);
-	encode_header(full_packet, transaction_ctx->remote_id, PACKET_TYPE_RSP, RSP_ID_VALID, ID_UNKNOWN);
+	NRF_RPC_WRN("------- %d", cmd_ctx->remote_id);
+	encode_header(full_packet, cmd_ctx->remote_id, PACKET_TYPE_RSP, RSP_ID_VALID, ID_UNKNOWN);
 
 	NRF_RPC_DBG("Sending response");
 
 	err = nrf_rpc_tr_send(full_packet, len + _NRF_RPC_HEADER_SIZE);
 
 	if (err >= 0) {
-		transaction_ctx->response_sent = true;
+		cmd_ctx->response_sent = true;
 	}
 	NRF_RPC_WRN("------ SEND DONE");
 	return err;
@@ -750,20 +760,28 @@ int nrf_rpc_init(void)
 	void *iter;
 	const struct nrf_rpc_group *group;
 	uint8_t group_id = 0;
+	const char *strid_ptr;
 
 	NRF_RPC_DBG("Initializing nRF RPC module");
+
+	groups_check_sum = 0;
 
 	for (NRF_RPC_AUTO_ARR_FOR(iter, group, &nrf_rpc_groups_array,
 				 const struct nrf_rpc_group)) {
 		
-		if (group_id > 0x7F) {
+		if (group_id >= 0xFF) {
 			return -ENOMEM;
+		}
+		for (strid_ptr = group->strid; *strid_ptr != 0; strid_ptr++)
+		{
+			groups_check_sum += (uint8_t)(*strid_ptr);
 		}
 		*group->group_id = group_id;
 		group_id++;
 	}
 
 	group_id_count = group_id;
+	groups_check_sum |= (uint32_t)group_id_count << 24;
 
 	memset(&transaction_pool, 0, sizeof(transaction_pool));
 
@@ -785,7 +803,9 @@ int nrf_rpc_init(void)
 	}
 
 	err = send_simple(ID_UNKNOWN, PACKET_TYPE_INIT,
-			  CONFIG_NRF_RPC_THREAD_POOL_SIZE, ID_UNKNOWN, NULL, 0);
+			  CONFIG_NRF_RPC_THREAD_POOL_SIZE, ID_UNKNOWN,
+			  (uint8_t *)(&groups_check_sum),
+			  sizeof(groups_check_sum));
 
 	NRF_RPC_DBG("Done initializing nRF RPC module");
 
@@ -802,11 +822,10 @@ void nrf_rpc_error_handler(int code, bool from_remote)
 
 void nrf_rpc_report_error(int code)
 {
-	struct nrf_rpc_transaction_ctx *transaction_ctx;
+	struct nrf_rpc_cmd_ctx *cmd_ctx;
 
 	if (code < 0) {
-		get_transaction_ctx(&transaction_ctx, false);
+		get_cmd_ctx(&cmd_ctx, false);
 		report_error(code);
 	}
 }
-#endif

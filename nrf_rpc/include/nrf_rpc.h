@@ -75,6 +75,7 @@ struct nrf_rpc_group {
 	const void *evt_array;
 	nrf_rpc_ack_handler_t ack_handler;
 	void *ack_handler_data;
+	const char *strid;
 };
 
 /** @brief Define a group of commands and events.
@@ -103,6 +104,7 @@ struct nrf_rpc_group {
 		.evt_array = &NRF_RPC_CONCAT(_name, _evt_array),	       \
 		.ack_handler = _ack_handler,				       \
 		.ack_handler_data = _data,				       \
+		.strid = _strid,					       \
 	}
 
 
