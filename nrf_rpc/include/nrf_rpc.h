@@ -40,10 +40,10 @@ extern "C" {
  * @param len          Length of the packet.
  * @param handler_data Opaque pointer provided by the user.
  */
-typedef int (*nrf_rpc_handler_t)(const uint8_t *packet, size_t len,
+typedef void (*nrf_rpc_handler_t)(const uint8_t *packet, size_t len,
 	void *handler_data);
 
-typedef int (*nrf_rpc_ack_handler_t)(uint8_t id, int return_value,
+typedef void (*nrf_rpc_ack_handler_t)(uint8_t id, int return_value,
 	void *handler_data);
 
 
@@ -178,9 +178,6 @@ struct nrf_rpc_group {
 	nrf_rpc_tr_alloc_tx_buf(&(_packet), _NRF_RPC_HEADER_SIZE + (_len));    \
 	*(uint8_t **)&(_packet) += _NRF_RPC_HEADER_SIZE
 
-#define NRF_RPC_ALLOC_FAILED(_packet)					       \
-	nrf_rpc_tr_alloc_failed((&_packet[-_NRF_RPC_HEADER_SIZE]))
-
 /** @brief Discards resources allocated for a new command.
  *
  * This macro should be used if a command was allocated, but it will not be send
@@ -307,7 +304,7 @@ int nrf_rpc_rsp_send(uint8_t *packet, size_t len);
  * be called. Content of the input data is no longer valid after this function
  * call.
  */
-void nrf_rpc_decoding_done(void);
+void nrf_rpc_decoding_done(const uint8_t *packet);
 
 
 /** @brief Function for handling errors that cannot be exposed as an API return

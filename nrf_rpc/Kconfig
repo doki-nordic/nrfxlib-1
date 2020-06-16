@@ -43,7 +43,7 @@ config NRF_RPC_TR_CUSTOM_INCLUDE
 	  file that contains custom transport layer API. Provided API must
 	  be compatible with the template header file "rp_trans_tmpl.h".
 
-config NRF_RPC_TRANSACTION_POLL_SIZE
+config NRF_RPC_CMD_CTX_POLL_SIZE
 	int "Number of available transactions"
 	default 16
 	help
