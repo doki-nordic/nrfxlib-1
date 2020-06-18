@@ -670,7 +670,7 @@ void nrf_rpc_cmd_common_no_err(const struct nrf_rpc_group *group, uint32_t cmd,
 /* ======================== Event sending ======================== */
 
 
-int nrf_rpc_evt_send(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet, size_t len)
+int nrf_rpc_evt(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet, size_t len)
 {
 	int err;
 	struct header hdr;
@@ -701,11 +701,11 @@ int nrf_rpc_evt_send(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *pa
 }
 
 
-void nrf_rpc_evt_send_noerr(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet, size_t len)
+void nrf_rpc_evt_noerr(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet, size_t len)
 {
 	int err;
 
-	err = nrf_rpc_evt_send(group, evt, packet, len);
+	err = nrf_rpc_evt(group, evt, packet, len);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled event send error %d", err);
 		error_report(err, NRF_RPC_ERR_SRC_SEND, group, evt,
@@ -717,7 +717,7 @@ void nrf_rpc_evt_send_noerr(const struct nrf_rpc_group *group, uint8_t evt, uint
 /* ======================== Response sending ======================== */
 
 
-int nrf_rpc_rsp_send(uint8_t *packet, size_t len)
+int nrf_rpc_rsp(uint8_t *packet, size_t len)
 {
 	int err;
 	struct header hdr;
@@ -742,11 +742,11 @@ int nrf_rpc_rsp_send(uint8_t *packet, size_t len)
 }
 
 
-void nrf_rpc_rsp_send_noerr(uint8_t *packet, size_t len)
+void nrf_rpc_rsp_noerr(uint8_t *packet, size_t len)
 {
 	int err;
 
-	err = nrf_rpc_rsp_send(packet, len);
+	err = nrf_rpc_rsp(packet, len);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled response send error %d", err);
 		error_report(err, NRF_RPC_ERR_SRC_SEND, NULL, NRF_RPC_ID_UNKNOWN,

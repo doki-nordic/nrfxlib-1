@@ -79,7 +79,7 @@ The default weak implementation is empty, but the error is put to the log before
 
 A second situation is when we want to serialize a function that returns `void`.
 An error code cannot be returned in this case.
-It is possible to use :cpp:func:`nrf_rpc_cmd_send_noerr` or :cpp:func:`nrf_rpc_cbor_cmd_send_noerr` which returns `void` and any error redirects to :cpp:func:`nrf_rpc_error_handler`.
+It is possible to use :cpp:func:`nrf_rpc_cmd_noerr` or :cpp:func:`nrf_rpc_cbor_cmd_noerr` which returns `void` and any error redirects to :cpp:func:`nrf_rpc_error_handler`.
 
 :cpp:func:`nrf_rpc_report_error` can be used to pass errors to :cpp:func:`nrf_rpc_error_handler`.
 

@@ -23,16 +23,16 @@ Encoders encodes commands and events into serialized packets.
 Creating an encoder is similar for all packet type.
 The first step is allocation of the buffer using e.g. :c:macro:`NRF_RPC_CMD_ALLOC`, :c:macro:`NRF_RPC_CBOR_EVT_ALLOC` or similar depending what kind of packet will be send.
 After that you can encode parameters directly into buffer or using `TinyCBOR <https://intel.github.io/tinycbor/current/>`_ library.
-In the last step packet is send using one of the sending function, e.g. :cpp:func:`nrf_rpc_cmd_send`, :cpp:func:`nrf_rpc_cbor_evt_send` or similar.
+In the last step packet is send using one of the sending function, e.g. :cpp:func:`nrf_rpc_cmd`, :cpp:func:`nrf_rpc_cbor_evt` or similar.
 
 As the result of sending command response is received, so it have to be parsed.
 There are two ways to prase the response.
 
-First is to provide response handler in parameters of :cpp:func:`nrf_rpc_cmd_send`.
-It will be called before :cpp:func:`nrf_rpc_cmd_send` returns.
+First is to provide response handler in parameters of :cpp:func:`nrf_rpc_cmd`.
+It will be called before :cpp:func:`nrf_rpc_cmd` returns.
 It may be called from a different thread.
 
-Second is to call :cpp:func:`nrf_rpc_cmd_rsp_send` or :cpp:func:`nrf_rpc_cbor_cmd_rsp_send` which have output parameters that will contain the response.
+Second is to call :cpp:func:`nrf_rpc_cmd_rsp` or :cpp:func:`nrf_rpc_cbor_cmd_rsp` which have output parameters that will contain the response.
 After parsing it :cpp:func:`nrf_rpc_decoding_done` function must be called to indicate that parsing is done and the buffers holding the response can be released.
 
 Events have no response, so nothing more have to be done after sending it.
@@ -75,7 +75,7 @@ Sample command encoder using TinyCBOR API:
 
 		cbor_encode_int(encoder, input);
 
-		err = nrf_rpc_cbor_cmd_send(&ctx, MATH_COMMAND_INC,
+		err = nrf_rpc_cbor_cmd(&ctx, MATH_COMMAND_INC,
 					    remote_inc_rsp, &result);
 
 		if (err == 0) {
@@ -166,7 +166,7 @@ Decoder associated with the examples above may be following:
 
 		cbor_encode_int(encoder, output);
 
-		return nrf_rpc_cbor_rsp_send(&ctx);
+		return nrf_rpc_cbor_rsp(&ctx);
 	}
 
 	NRF_RPC_CBOR_CMD_DECODER(math_group, remote_inc, MATH_COMMAND_INC,

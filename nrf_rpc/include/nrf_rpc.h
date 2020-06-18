@@ -281,7 +281,7 @@ int nrf_rpc_init(nrf_rpc_err_handler_t err_handler);
  * @return             0 on success or negative error code if a transport layer
  *                     reported a sendig error.
  */
-static inline int nrf_rpc_cmd_send(const struct nrf_rpc_group *group,
+static inline int nrf_rpc_cmd(const struct nrf_rpc_group *group,
 				   uint8_t cmd, uint8_t *packet, size_t len,
 				   nrf_rpc_handler_t handler,
 				   void *handler_data);
@@ -305,7 +305,7 @@ static inline int nrf_rpc_cmd_send(const struct nrf_rpc_group *group,
  * @return                0 on success or negative error code if a transport
  *                        layer reported a sendig error.
  */
-static inline int nrf_rpc_cmd_rsp_send(const struct nrf_rpc_group *group,
+static inline int nrf_rpc_cmd_rsp(const struct nrf_rpc_group *group,
 				       uint8_t cmd, uint8_t *packet, size_t len,
 				       const uint8_t **rsp_packet,
 				       size_t *rsp_len);
@@ -328,7 +328,7 @@ static inline int nrf_rpc_cmd_rsp_send(const struct nrf_rpc_group *group,
  *                     undefined if the handler will be called.
  * @param handler_data Opaque pointer that will be passed to @a handler.
  */
-static inline void nrf_rpc_cmd_send_no_err(const struct nrf_rpc_group *group,
+static inline void nrf_rpc_cmd_no_err(const struct nrf_rpc_group *group,
 					   uint8_t cmd, uint8_t *packet,
 					   size_t len,
 					   nrf_rpc_handler_t handler,
@@ -338,7 +338,7 @@ static inline void nrf_rpc_cmd_send_no_err(const struct nrf_rpc_group *group,
 /** @brief Send a command, get response as an output parameter and pass any
  * error to an error handler.
  * 
- * See both @ref nrf_rpc_cmd_rsp_send and @ref nrf_rpc_cmd_send_no_err for more
+ * See both @ref nrf_rpc_cmd_rsp and @ref nrf_rpc_cmd_no_err for more
  * details on this variant of command send function.
  *
  * @param[in]  group      Group that command belongs to.
@@ -349,7 +349,7 @@ static inline void nrf_rpc_cmd_send_no_err(const struct nrf_rpc_group *group,
  * @param[out] rsp_packet Packet containing the response or NULL on error.
  * @param[out] rsp_len    Length of @a rsp_packet.
  */
-static inline void nrf_rpc_cmd_rsp_send_no_err(
+static inline void nrf_rpc_cmd_rsp_no_err(
 					      const struct nrf_rpc_group *group,
 					      uint8_t cmd, uint8_t *packet,
 					      size_t len,
@@ -367,7 +367,7 @@ static inline void nrf_rpc_cmd_rsp_send_no_err(
  * @return       0 on success or negative error code if a transport layer
  *               reported a sendig error.
  */
-int nrf_rpc_evt_send(const struct nrf_rpc_group *group, uint8_t evt,
+int nrf_rpc_evt(const struct nrf_rpc_group *group, uint8_t evt,
 		     uint8_t *packet, size_t len);
 
 
@@ -383,7 +383,7 @@ int nrf_rpc_evt_send(const struct nrf_rpc_group *group, uint8_t evt,
  *               an encoded data.
  * @param len    Length of the packet. Can be smaller than allocated.
  */
-void nrf_rpc_evt_send_noerr(const struct nrf_rpc_group *group, uint8_t evt,
+void nrf_rpc_evt_noerr(const struct nrf_rpc_group *group, uint8_t evt,
 			    uint8_t *packet, size_t len);
 
 
@@ -396,7 +396,7 @@ void nrf_rpc_evt_send_noerr(const struct nrf_rpc_group *group, uint8_t evt,
  * @return       0 on success or negative error code if a transport layer
  *               reported a sendig error.
  */
-int nrf_rpc_rsp_send(uint8_t *packet, size_t len);
+int nrf_rpc_rsp(uint8_t *packet, size_t len);
 
 
 /** @brief Send a response and pass any error to an error handler.
@@ -409,14 +409,14 @@ int nrf_rpc_rsp_send(uint8_t *packet, size_t len);
  *               encoded data.
  * @param len    Length of the packet. Can be smaller than allocated.
  */
-void nrf_rpc_rsp_send_noerr(uint8_t *packet, size_t len);
+void nrf_rpc_rsp_noerr(uint8_t *packet, size_t len);
 
 
 /** @brief Indicate that decoding of the input packet is done.
  *
  * This function must be called as soon as the input packet was parsed and can
  * be deallocated. It must be called in command decoder, event decoder and after
- * @ref nrf_rpc_cmd_rsp_send or @ref nrf_rpc_cmd_rsp_send_no_err. Packet is
+ * @ref nrf_rpc_cmd_rsp or @ref nrf_rpc_cmd_rsp_no_err. Packet is
  * automatically deallocated after completetion of the response handler
  * function, so this `nrf_rpc_decoding_done` is not needed in response handler.
  */
@@ -426,7 +426,7 @@ void nrf_rpc_decoding_done(const uint8_t *packet);
 /* Inline definitions. */
 
 
-static inline int nrf_rpc_cmd_send(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
+static inline int nrf_rpc_cmd(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
 		     size_t len, nrf_rpc_handler_t handler, void *handler_data)
 {
 	int nrf_rpc_cmd_common(const struct nrf_rpc_group *group, uint32_t cmd,
@@ -437,7 +437,7 @@ static inline int nrf_rpc_cmd_send(const struct nrf_rpc_group *group, uint8_t cm
 }
 
 
-static inline int nrf_rpc_cmd_rsp_send(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
+static inline int nrf_rpc_cmd_rsp(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
 			 size_t len, const uint8_t **rsp_packet,
 			 size_t *rsp_len)
 {
@@ -449,7 +449,7 @@ static inline int nrf_rpc_cmd_rsp_send(const struct nrf_rpc_group *group, uint8_
 }
 
 
-static inline void nrf_rpc_cmd_send_no_err(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
+static inline void nrf_rpc_cmd_no_err(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
 		     size_t len, nrf_rpc_handler_t handler, void *handler_data)
 {
 	void nrf_rpc_cmd_common_no_err(const struct nrf_rpc_group *group, uint32_t cmd,
@@ -460,7 +460,7 @@ static inline void nrf_rpc_cmd_send_no_err(const struct nrf_rpc_group *group, ui
 }
 
 
-static inline void nrf_rpc_cmd_rsp_send_no_err(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
+static inline void nrf_rpc_cmd_rsp_no_err(const struct nrf_rpc_group *group, uint8_t cmd, uint8_t *packet,
 			 size_t len, const uint8_t **rsp_packet,
 			 size_t *rsp_len)
 {
