@@ -3,35 +3,35 @@
 Transport
 #########
 
-The bottom layer of the nRF_RPC is a transport layer.
+The bottom layer of the nRF RPC is a transport layer.
 It is OS-dependent.
 Its main goal is to transfer packets between two sites and to handle thread pool.
 The transport implementation can be selected by the configuration.
 
 Currently the default transport is `OpenAMP <https://github.com/OpenAMP/open-amp/>`_ on `Zephyr <https://www.zephyrproject.org/>`_.
 
-NOTE: It is not required to know how the transport layer is implemented when using the nRF_RPC API.
+NOTE: It is not required to know how the transport layer is implemented when using the nRF RPC API.
 Knowledge of the transport implementation is required to implement an alternate transport, or port to a different operating system.
 
-The template header describing the nRF_RPC transport APIS is ``template/nrf_rpc_tr_tmpl.h``.
+The template header describing the nRF RPC transport APIS is ``template/nrf_rpc_tr_tmpl.h``.
 Header file ``include/rp_trans.h`` is responsible for including right transport header file based on the configuration.
 
 
 Endpoints
 =========
 
-An important concept of the nRF_RPC transport is an `endpoint`.
+An important concept of the nRF RPC transport is an `endpoint`.
 The endpoint is a destination where packets are sent.
 One endpoint is associated with a thread that is responsible for reading packets from it.
 
 Endpoints on the remote side are represented by the :c:struct:`nrf_rpc_tr_remote_ep` structure.
-nRF_RPC sends packets to a remote endpoint using this structure.
+nRF RPC sends packets to a remote endpoint using this structure.
 Endpoints on the local side are represented by the :c:struct:`nrf_rpc_tr_local_ep` structure.
-nRF_RPC receives packets from a local endpoint using this structure.
+nRF RPC receives packets from a local endpoint using this structure.
 
 There is one special endpoint called the "null" endpoint.
 It is represented as a NULL value in pointers to the :c:struct:`nrf_rpc_tr_local_ep` or the :c:struct:`nrf_rpc_tr_remote_ep`.
-It is used by the nRF_RPC to transmit control packets that are not associated with any thread or endpoint.
+It is used by the nRF RPC to transmit control packets that are not associated with any thread or endpoint.
 For example, it transmits information if an error occurs, or a packet informing that the event handling finished and the thread from the thread pool is now free.
 
 :cpp:func:`nrf_rpc_tr_send` sends a packet to the remote endpoint.

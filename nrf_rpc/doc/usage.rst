@@ -8,7 +8,7 @@ Specific API can be used remotely if encoders/decoders are provided for it.
 One one side there are encoders that encodes parameters and sends a commands or events.
 On the other side there are decoders that decodes and executes specific procedure.
 
-Main goal of the nRF_RPC API is to allow creation of encoders/decoders.
+Main goal of the nRF RPC API is to allow creation of encoders/decoders.
 
 Encoders and decoders are grouped.
 Each group contains functions related to a single API, e.g. Bluetooth, entropy, e.t.c.
