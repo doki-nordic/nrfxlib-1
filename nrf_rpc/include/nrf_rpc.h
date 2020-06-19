@@ -191,7 +191,7 @@ struct nrf_rpc_err_report {
  * @param _name  Symbol name of the group.
  */
 #define NRF_RPC_GROUP_DECLARE(_name)					       \
-	extern const struct nrf_rpc_group _name;
+	extern const struct nrf_rpc_group _name
 
 
 /** @brief Register a command decoder.

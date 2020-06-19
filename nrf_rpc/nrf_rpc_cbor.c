@@ -22,7 +22,7 @@ struct handler_proxy_ctx {
 };
 
 
-/* All Context structures are independently defined for API user convinient, but
+/* All Context structures are independently defined for API user convenient, but
  * they need the same layout to allow casting between them. Following asserts
  * ensures that.
  */
@@ -98,8 +98,8 @@ int nrf_rpc_cbor_cmd_rsp(const struct nrf_rpc_group *group, uint8_t cmd,
 	}
 
 	if (cbor_parser_init(&ctx->reader.r, 0, &ctx->parser, &ctx->value)
-				!= CborNoError && err >= 0)
-	{
+				!= CborNoError && err >= 0) {
+
 		nrf_rpc_decoding_done(ctx->in_packet);
 		err = -EBADMSG;
 	}

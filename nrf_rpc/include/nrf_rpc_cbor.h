@@ -70,8 +70,7 @@ struct nrf_rpc_cbor_ctx {
  * fields are significant for the API, other fields are internal.
  */
 struct nrf_rpc_cbor_rsp_ctx {
-	union
-	{
+	union {
 		struct {
 			/** @brief TinyCBOR encoder for encoding command. */
 			CborEncoder encoder;
@@ -154,7 +153,7 @@ struct nrf_rpc_cbor_rsp_ctx {
  *
  * @param _ctx Packet that was previously allocated.
  */
-#define NRF_RPC_CBOR_DISCARD(_ctx) NRF_RPC_DISCARD((_ctx).out_packet);
+#define NRF_RPC_CBOR_DISCARD(_ctx) NRF_RPC_DISCARD((_ctx).out_packet)
 
 
 /** @brief Send a command and provide callback to handle response.

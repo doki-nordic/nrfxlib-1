@@ -37,7 +37,7 @@ struct nrf_rpc_cmd_ctx {
 				    * each time context is reused.
 				    */
 	nrf_rpc_handler_t handler; /* Response handler provided be the user. */
-	void* handler_data;	   /* Pointer for the response handler. */
+	void *handler_data;	   /* Pointer for the response handler. */
 	struct nrf_rpc_os_msg recv_msg;
 				   /* Message passing between transport
 				    * receive callback and a thread that waits
@@ -76,7 +76,7 @@ NRF_RPC_AUTO_ARR(nrf_rpc_groups_array, "grp");
 /* ======================== Common utilities ======================== */
 
 
-static struct nrf_rpc_cmd_ctx *cmd_ctx_alloc()
+static struct nrf_rpc_cmd_ctx *cmd_ctx_alloc(void)
 {
 	struct nrf_rpc_cmd_ctx *ctx;
 	uint32_t index;
@@ -105,16 +105,16 @@ static void cmd_ctx_free(struct nrf_rpc_cmd_ctx *ctx)
 }
 
 
-static struct nrf_rpc_cmd_ctx *cmd_ctx_reserve()
+static struct nrf_rpc_cmd_ctx *cmd_ctx_reserve(void)
 {
 	struct nrf_rpc_cmd_ctx *ctx = nrf_rpc_os_tls_get();
 
 	if (ctx == NULL) {
 		nrf_rpc_os_remote_reserve();
-		return cmd_ctx_alloc(ctx);
-	} else {
-		ctx->use_count++;
+		return cmd_ctx_alloc();
 	}
+
+	ctx->use_count++;
 
 	return ctx;
 }
@@ -399,8 +399,8 @@ static void receive_handler(const uint8_t *packet, size_t len)
 		hdr.type = NRF_RPC_PACKET_TYPE_EVT;
 	}
 
-	switch (hdr.type)
-	{
+	switch (hdr.type) {
+
 	case NRF_RPC_PACKET_TYPE_CMD: /* with known destination */
 	case NRF_RPC_PACKET_TYPE_RSP:
 
@@ -451,7 +451,7 @@ static void receive_handler(const uint8_t *packet, size_t len)
 	case NRF_RPC_PACKET_TYPE_ERR:
 		remote_err = -EBADMSG;
 		if (len >= _NRF_RPC_HEADER_SIZE + sizeof(int)) {
-			remote_err = *(int*)(&packet[_NRF_RPC_HEADER_SIZE]);
+			remote_err = *(int *)(&packet[_NRF_RPC_HEADER_SIZE]);
 		}
 		nrf_rpc_err(remote_err, NRF_RPC_ERR_SRC_REMOTE, group, hdr.id,
 			    hdr.src);
@@ -461,7 +461,7 @@ static void receive_handler(const uint8_t *packet, size_t len)
 		nrf_rpc_os_remote_count(hdr.id);
 
 		if (len >= _NRF_RPC_HEADER_SIZE + sizeof(uint32_t) &&
-		    (*(uint32_t*)(&packet[_NRF_RPC_HEADER_SIZE]) !=
+		    (*(uint32_t *)(&packet[_NRF_RPC_HEADER_SIZE]) !=
 		     groups_check_sum)) {
 
 			NRF_RPC_ERR("Remote groups does not match local");
@@ -751,8 +751,7 @@ int nrf_rpc_init(nrf_rpc_err_handler_t err_handler)
 		if (group_id >= 0xFF) {
 			return -ENOMEM;
 		}
-		for (strid_ptr = group->strid; *strid_ptr != 0; strid_ptr++)
-		{
+		for (strid_ptr = group->strid; *strid_ptr != 0; strid_ptr++) {
 			groups_check_sum += (uint8_t)(*strid_ptr);
 		}
 		NRF_RPC_DBG("Group '%s' has id %d", group->strid, group_id);
