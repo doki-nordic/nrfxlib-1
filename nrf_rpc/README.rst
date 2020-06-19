@@ -21,17 +21,29 @@ An API layer above the core nRF RPC API uses the `TinyCBOR <https://intel.github
 
    doc/architecture
    doc/usage
-   doc/transport
+
+API documentation
+=================
+
+.. _nrf_rpc_core_api_documentation:
 
 Core API documentation
-======================
+----------------------
+
+This API is using pointers to raw packet data.
+:ref:`nrf_rpc_cbor_api_documentation` provides serialization layer over it that uses TinyCBOR.
 
 .. doxygengroup:: nrf_rpc
    :project: nrfxlib
    :members:
 
-CBOR API documentation
-======================
+.. _nrf_rpc_cbor_api_documentation:
+
+TinyCBOR API documentation
+--------------------------
+
+This API is created on top of core nRF RPC API and it is not independent.
+See :ref:`nrf_rpc_core_api_documentation` to get more information needed to use nRF RPC together with TinyCBOR.
 
 .. doxygengroup:: nrf_rpc_cbor
    :project: nrfxlib

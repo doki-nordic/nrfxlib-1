@@ -13,7 +13,7 @@ Main goal of the nRF RPC API is to allow creation of encoders/decoders.
 Encoders and decoders are grouped.
 Each group contains functions related to a single API, e.g. Bluetooth, entropy, e.t.c.
 Group is created with the :c:macro:`NRF_RPC_GROUP_DEFINE`.
-Grouping allows logically divide the remote API, but also increase performance of nRF_PRC.
+Grouping allows logically divide the remote API, but also increase performance of nRF RPC.
 
 
 Encoders

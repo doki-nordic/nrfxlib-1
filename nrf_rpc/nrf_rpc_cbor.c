@@ -11,6 +11,7 @@
 
 #include <nrf_rpc.h>
 #include <nrf_rpc_cbor.h>
+#include <nrf_rpc_common.h>
 
 
 struct handler_proxy_ctx {
@@ -18,24 +19,35 @@ struct handler_proxy_ctx {
 	CborParser parser;
 	struct cbor_buf_reader reader;
 	const uint8_t *in_packet;
-}
+};
 
+
+/* All Context structures are independently defined for API user convinient, but
+ * they need the same layout to allow casting between them. Following asserts
+ * ensures that.
+ */
 NRF_RPC_STATIC_ASSERT(offsetof(struct nrf_rpc_cbor_ctx, encoder) ==
-		      offsetof(struct nrf_rpc_cbor_rsp_ctx, encoder));
+		      offsetof(struct nrf_rpc_cbor_rsp_ctx, encoder),
+		      "Context structures fields does not match");
 NRF_RPC_STATIC_ASSERT(offsetof(struct nrf_rpc_cbor_ctx, out_packet) ==
-		      offsetof(struct nrf_rpc_cbor_rsp_ctx, out_packet));
+		      offsetof(struct nrf_rpc_cbor_rsp_ctx, out_packet),
+		      "Context structures fields does not match");
 NRF_RPC_STATIC_ASSERT(offsetof(struct nrf_rpc_cbor_ctx, writer) ==
-		      offsetof(struct nrf_rpc_cbor_rsp_ctx, writer));
+		      offsetof(struct nrf_rpc_cbor_rsp_ctx, writer),
+		      "Context structures fields does not match");
 
-NRF_RPC_STATIC_ASSERT(offsetof(struct handler_proxy_ctx, value) == 0);
-NRF_RPC_STATIC_ASSERT(offsetof(struct nrf_rpc_cbor_rsp_ctx, value) == 0);
-
+NRF_RPC_STATIC_ASSERT(offsetof(struct handler_proxy_ctx, value) ==
+		      offsetof(struct nrf_rpc_cbor_rsp_ctx, value),
+		      "Context structures fields does not match");
 NRF_RPC_STATIC_ASSERT(offsetof(struct handler_proxy_ctx, parser) ==
-		      offsetof(struct nrf_rpc_cbor_rsp_ctx, parser));
+		      offsetof(struct nrf_rpc_cbor_rsp_ctx, parser),
+		      "Context structures fields does not match");
 NRF_RPC_STATIC_ASSERT(offsetof(struct handler_proxy_ctx, reader) ==
-		      offsetof(struct nrf_rpc_cbor_rsp_ctx, reader));
+		      offsetof(struct nrf_rpc_cbor_rsp_ctx, reader),
+		      "Context structures fields does not match");
 NRF_RPC_STATIC_ASSERT(offsetof(struct handler_proxy_ctx, in_packet) ==
-		      offsetof(struct nrf_rpc_cbor_rsp_ctx, in_packet));
+		      offsetof(struct nrf_rpc_cbor_rsp_ctx, in_packet),
+		      "Context structures fields does not match");
 
 
 int nrf_rpc_cbor_cmd(const struct nrf_rpc_group *group,
@@ -44,10 +56,10 @@ int nrf_rpc_cbor_cmd(const struct nrf_rpc_group *group,
 				   void *handler_data)
 {
 	size_t len;
-	const struct nrf_rpc_cbor_decoder cbor_handler = {
+	const struct _nrf_rpc_cbor_decoder cbor_handler = {
 		.handler = handler,
 		.handler_data = handler_data,
-		.decode_done_required = false,
+		.decoding_done_required = false,
 	};
 
 	if (cbor_encode_null(&ctx->encoder) != CborNoError) {
@@ -91,7 +103,7 @@ int nrf_rpc_cbor_cmd_rsp(const struct nrf_rpc_group *group,
 	if (cbor_parser_init(&ctx->reader.r, 0, &ctx->parser, &ctx->value)
 				!= CborNoError && err >= 0)
 	{
-		nrf_rpc_decoding_done(rsp_packet);
+		nrf_rpc_decoding_done(ctx->in_packet);
 		err = -EBADMSG;
 	}
 	ctx->value.remaining = UINT32_MAX;
@@ -99,17 +111,17 @@ int nrf_rpc_cbor_cmd_rsp(const struct nrf_rpc_group *group,
 	return err;
 }
 
-void nrf_rpc_cbor_cmd_no_err(const struct nrf_rpc_group *group,
-				      uint8_t cmd, struct nrf_rpc_cbor_ctx *ctx,
-				      nrf_rpc_handler_t handler,
-				      void *handler_data)
+void nrf_rpc_cbor_cmd_no_err(const struct nrf_rpc_group *group, uint8_t cmd,
+			     struct nrf_rpc_cbor_ctx *ctx,
+			     nrf_rpc_cbor_handler_t handler,
+			     void *handler_data)
 {
 	int err;
 
 	err = nrf_rpc_cbor_cmd(group, cmd, ctx, handler, handler_data);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
-		error_report(err, NRF_RPC_ERR_SRC_SEND, group, cmd,
+		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, group, cmd,
 			     NRF_RPC_PACKET_TYPE_CMD);
 	}
 }
@@ -124,7 +136,7 @@ void nrf_rpc_cbor_cmd_rsp_no_err(
 	err = nrf_rpc_cbor_cmd_rsp(group, cmd, ctx);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
-		error_report(err, NRF_RPC_ERR_SRC_SEND, group, cmd,
+		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, group, cmd,
 			     NRF_RPC_PACKET_TYPE_CMD);
 	}
 }
@@ -153,7 +165,7 @@ void nrf_rpc_cbor_evt_noerr(const struct nrf_rpc_group *group, uint8_t evt,
 	err = nrf_rpc_cbor_evt(group, evt, ctx);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
-		error_report(err, NRF_RPC_ERR_SRC_SEND, group, evt,
+		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, group, evt,
 			     NRF_RPC_PACKET_TYPE_EVT);
 	}
 
@@ -183,7 +195,7 @@ void nrf_rpc_cbor_rsp_noerr(struct nrf_rpc_cbor_ctx *ctx)
 	err = nrf_rpc_cbor_rsp(ctx);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
-		error_report(err, NRF_RPC_ERR_SRC_SEND, NULL, NRF_RPC_ID_UNKNOWN,
+		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, NULL, NRF_RPC_ID_UNKNOWN,
 			     NRF_RPC_PACKET_TYPE_RSP);
 	}
 
@@ -199,7 +211,6 @@ void nrf_rpc_cbor_decoding_done(CborValue *value)
 }
 
 
-
 void _nrf_rpc_cbor_proxy_handler(const uint8_t *packet, size_t len,
 				void *handler_data)
 {
@@ -207,8 +218,8 @@ void _nrf_rpc_cbor_proxy_handler(const uint8_t *packet, size_t len,
 
 	ctx.in_packet = packet;
 
-	struct nrf_rpc_cbor_decoder *cbor_handler =
-		(struct nrf_rpc_cbor_decoder *)handler_data;
+	struct _nrf_rpc_cbor_decoder *cbor_handler =
+		(struct _nrf_rpc_cbor_decoder *)handler_data;
 
 	cbor_buf_reader_init(&ctx.reader, packet, len);
 
@@ -216,11 +227,11 @@ void _nrf_rpc_cbor_proxy_handler(const uint8_t *packet, size_t len,
 		if (cbor_handler->decoding_done_required) {
 			nrf_rpc_decoding_done(packet);
 		}
-		error_report(-EBADMSG, NRF_RPC_ERR_SRC_RECV, NULL, NRF_RPC_ID_UNKNOWN,
+		nrf_rpc_err(-EBADMSG, NRF_RPC_ERR_SRC_RECV, NULL, NRF_RPC_ID_UNKNOWN,
 			     NRF_RPC_PACKET_TYPE_CMD);
 		return;
 	}
-	value.remaining = UINT32_MAX;
+	ctx.value.remaining = UINT32_MAX;
 
 	return cbor_handler->handler(&ctx.value, cbor_handler->handler_data);
 }

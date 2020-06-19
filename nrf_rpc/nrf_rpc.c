@@ -222,7 +222,7 @@ static int simple_send(uint8_t dst, uint8_t type, uint8_t id, uint8_t group_id,
 }
 
 /** Report an error that cannot be reported as a function return value */
-static void error_report(int code, enum nrf_rpc_err_src src,
+void nrf_rpc_err(int code, enum nrf_rpc_err_src src,
 			 const struct nrf_rpc_group *group, uint8_t id,
 			 uint8_t packet_type)
 {
@@ -276,13 +276,13 @@ static void handler_execute(uint8_t id, const uint8_t *packet, size_t len,
 			    const struct nrf_rpc_group *group)
 {
 	void *iter;
-	const struct nrf_rpc_decoder *decoder;
+	const struct _nrf_rpc_decoder *decoder;
 
 	NRF_RPC_ASSERT(packet_validate(packet));
 	NRF_RPC_ASSERT(array != NULL);
 
 	for (NRF_RPC_AUTO_ARR_FOR(iter, decoder, array,
-				 const struct nrf_rpc_decoder)) {
+				 const struct _nrf_rpc_decoder)) {
 
 		if (id == decoder->id) {
 			decoder->handler(packet, len, decoder->handler_data);
@@ -294,7 +294,7 @@ static void handler_execute(uint8_t id, const uint8_t *packet, size_t len,
 
 	NRF_RPC_ERR("Unknown command or event received");
 
-	error_report(-ENOENT, NRF_RPC_ERR_SRC_RECV, group, id,
+	nrf_rpc_err(-ENOENT, NRF_RPC_ERR_SRC_RECV, group, id,
 		     (group->evt_array == array ? NRF_RPC_PACKET_TYPE_EVT :
 		      NRF_RPC_PACKET_TYPE_CMD));
 }
@@ -381,7 +381,7 @@ static uint8_t parse_incoming_packet(struct nrf_rpc_cmd_ctx *cmd_ctx,
 				  *group->group_id, NULL, 0);
 		if (err < 0) {
 			NRF_RPC_ERR("ACK send error");
-			error_report(err, NRF_RPC_ERR_SRC_SEND, group, hdr.id,
+			nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, group, hdr.id,
 				     hdr.type);
 		}
 
@@ -490,7 +490,7 @@ static void receive_handler(const uint8_t *packet, size_t len)
 		if (len >= _NRF_RPC_HEADER_SIZE + sizeof(int)) {
 			remote_err = *(int*)(&packet[_NRF_RPC_HEADER_SIZE]);
 		}
-		error_report(remote_err, NRF_RPC_ERR_SRC_REMOTE, group, hdr.id,
+		nrf_rpc_err(remote_err, NRF_RPC_ERR_SRC_REMOTE, group, hdr.id,
 			     hdr.src);
 		break;
 
@@ -519,7 +519,7 @@ cleanup_and_exit:
 	}
 
 	if (err < 0) {
-		error_report(err, NRF_RPC_ERR_SRC_RECV, group, hdr.id,
+		nrf_rpc_err(err, NRF_RPC_ERR_SRC_RECV, group, hdr.id,
 			     hdr.type);
 	}
 }
@@ -660,7 +660,7 @@ void nrf_rpc_cmd_common_no_err(const struct nrf_rpc_group *group, uint32_t cmd,
 	err = nrf_rpc_cmd_common(group, cmd, packet, len, ptr1, ptr2);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
-		error_report(err, NRF_RPC_ERR_SRC_SEND, group, cmd,
+		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, group, cmd,
 			     NRF_RPC_PACKET_TYPE_CMD);
 	}
 }
@@ -708,7 +708,7 @@ void nrf_rpc_evt_noerr(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *
 	err = nrf_rpc_evt(group, evt, packet, len);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled event send error %d", err);
-		error_report(err, NRF_RPC_ERR_SRC_SEND, group, evt,
+		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, group, evt,
 			     NRF_RPC_PACKET_TYPE_EVT);
 	}
 }
@@ -749,7 +749,7 @@ void nrf_rpc_rsp_noerr(uint8_t *packet, size_t len)
 	err = nrf_rpc_rsp(packet, len);
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled response send error %d", err);
-		error_report(err, NRF_RPC_ERR_SRC_SEND, NULL, NRF_RPC_ID_UNKNOWN,
+		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, NULL, NRF_RPC_ID_UNKNOWN,
 			     NRF_RPC_PACKET_TYPE_RSP);
 	}
 }
