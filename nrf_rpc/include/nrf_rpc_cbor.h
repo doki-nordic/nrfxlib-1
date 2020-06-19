@@ -103,7 +103,7 @@ struct nrf_rpc_cbor_rsp_ctx {
 	struct _nrf_rpc_cbor_decoder NRF_RPC_CONCAT(_name, _cbor_data) = {     \
 		.handler = _handler,					       \
 		.handler_data = _data,					       \
-		.decode_done_required = true,				       \
+		.decoding_done_required = true,				       \
 	};								       \
 	NRF_RPC_CMD_DECODER(_group, _name, _cmd, _nrf_rpc_cbor_proxy_handler,  \
 			    (void *)&NRF_RPC_CONCAT(_name, _cbor_data))
@@ -123,7 +123,7 @@ struct nrf_rpc_cbor_rsp_ctx {
 	struct _nrf_rpc_cbor_decoder NRF_RPC_CONCAT(_name, _cbor_data) = {     \
 		.handler = _handler,					       \
 		.handler_data = _data,					       \
-		.decode_done_required = true,				       \
+		.decoding_done_required = true,				       \
 	};								       \
 	NRF_RPC_EVT_DECODER(_group, _name, _evt, _nrf_rpc_cbor_proxy_handler,  \
 			    (void *)&NRF_RPC_CONCAT(_name, _cbor_data))
@@ -143,7 +143,7 @@ struct nrf_rpc_cbor_rsp_ctx {
  * @param[in]  _len  Requested length of the packet.
  */
 #define NRF_RPC_CBOR_ALLOC(_ctx, _len)					       \
-	NRF_RPC_ALLOC(&(_ctx).out_packet, (_len) + 1);			       \
+	NRF_RPC_ALLOC((_ctx).out_packet, (_len) + 1);			       \
 	_nrf_rpc_cbor_prepare((struct nrf_rpc_cbor_ctx *)(&(_ctx)), (_len) + 1)
 
 
@@ -254,8 +254,8 @@ int nrf_rpc_cbor_evt(const struct nrf_rpc_group *group, uint8_t evt,
  * @param evt    Event id.
  * @param ctx    Context allocated by @ref NRF_RPC_CBOR_ALLOC.
  */
-void nrf_rpc_cbor_evt_noerr(const struct nrf_rpc_group *group, uint8_t evt,
-			    struct nrf_rpc_cbor_ctx *ctx);
+void nrf_rpc_cbor_evt_no_err(const struct nrf_rpc_group *group, uint8_t evt,
+			     struct nrf_rpc_cbor_ctx *ctx);
 
 
 /** @brief Send a response.
@@ -276,7 +276,7 @@ int nrf_rpc_cbor_rsp(struct nrf_rpc_cbor_ctx *ctx);
  *
  * @param ctx    Context allocated by @ref NRF_RPC_CBOR_ALLOC.
  */
-void nrf_rpc_cbor_rsp_noerr(struct nrf_rpc_cbor_ctx *ctx);
+void nrf_rpc_cbor_rsp_no_err(struct nrf_rpc_cbor_ctx *ctx);
 
 
 /** @brief Indicate that decoding of the input packet is done.

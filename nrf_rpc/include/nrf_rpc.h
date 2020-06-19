@@ -383,8 +383,8 @@ int nrf_rpc_evt(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet,
  *               an encoded data.
  * @param len    Length of the packet. Can be smaller than allocated.
  */
-void nrf_rpc_evt_noerr(const struct nrf_rpc_group *group, uint8_t evt,
-		       uint8_t *packet, size_t len);
+void nrf_rpc_evt_no_err(const struct nrf_rpc_group *group, uint8_t evt,
+			uint8_t *packet, size_t len);
 
 
 /** @brief Send a response.
@@ -409,7 +409,7 @@ int nrf_rpc_rsp(uint8_t *packet, size_t len);
  *               encoded data.
  * @param len    Length of the packet. Can be smaller than allocated.
  */
-void nrf_rpc_rsp_noerr(uint8_t *packet, size_t len);
+void nrf_rpc_rsp_no_err(uint8_t *packet, size_t len);
 
 
 /** @brief Indicate that decoding of the input packet is done.

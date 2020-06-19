@@ -157,8 +157,8 @@ int nrf_rpc_cbor_evt(const struct nrf_rpc_group *group, uint8_t evt,
 	return nrf_rpc_evt(group, evt, ctx->out_packet, len);
 }
 
-void nrf_rpc_cbor_evt_noerr(const struct nrf_rpc_group *group, uint8_t evt,
-			    struct nrf_rpc_cbor_ctx *ctx)
+void nrf_rpc_cbor_evt_no_err(const struct nrf_rpc_group *group, uint8_t evt,
+			     struct nrf_rpc_cbor_ctx *ctx)
 {
 	int err;
 
@@ -188,7 +188,7 @@ int nrf_rpc_cbor_rsp(struct nrf_rpc_cbor_ctx *ctx)
 }
 
 
-void nrf_rpc_cbor_rsp_noerr(struct nrf_rpc_cbor_ctx *ctx)
+void nrf_rpc_cbor_rsp_no_err(struct nrf_rpc_cbor_ctx *ctx)
 {
 	int err;
 
