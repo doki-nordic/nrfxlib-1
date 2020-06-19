@@ -44,15 +44,23 @@ config NRF_RPC_TR_CUSTOM_INCLUDE
 	  be compatible with the template header file "rp_trans_tmpl.h".
 
 config NRF_RPC_CMD_CTX_POLL_SIZE
-	int "Number of available transactions"
-	default 16
+	int "Number of available context structures for commands"
+	default 8
+	range 2 32
 	help
-	  Specifies the size of transactions pool. DKTODO: More doc
+	  nRF RPC need to store some data to handle commands. Pool of contexts
+	  is created to avoid dynamic memory allocation. Setting this value too
+	  low will cause unnecessary waits for available context. Minimum value
+	  that ensures work without waits is the number of threads in both local
+	  and remote pool.
 
 config NRF_RPC_THREAD_POOL_SIZE
-	int "Number of thread in local thread pool"
+	int "Number of threads in local thread pool"
 	default 3
+	range 1 32
 	help
-	  DKTODO: More doc
+	  Thread pool is used to execute commands and events that arrived from
+	  the remote side. If there is no available threads then remote side
+	  will wait.
 
 endif # NRF_RPC
