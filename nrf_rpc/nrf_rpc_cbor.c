@@ -50,10 +50,9 @@ NRF_RPC_STATIC_ASSERT(offsetof(struct handler_proxy_ctx, in_packet) ==
 		      "Context structures fields does not match");
 
 
-int nrf_rpc_cbor_cmd(const struct nrf_rpc_group *group,
-				   uint8_t cmd, struct nrf_rpc_cbor_ctx *ctx,
-				   nrf_rpc_cbor_handler_t handler,
-				   void *handler_data)
+int nrf_rpc_cbor_cmd(const struct nrf_rpc_group *group, uint8_t cmd,
+		     struct nrf_rpc_cbor_ctx *ctx,
+		     nrf_rpc_cbor_handler_t handler, void *handler_data)
 {
 	size_t len;
 	const struct _nrf_rpc_cbor_decoder cbor_handler = {
@@ -74,16 +73,14 @@ int nrf_rpc_cbor_cmd(const struct nrf_rpc_group *group,
 				(void *)&cbor_handler);
 }
 
-static const uint8_t dummy_buffer[1];
 
-int nrf_rpc_cbor_cmd_rsp(const struct nrf_rpc_group *group,
-				  uint8_t cmd,
-				  struct nrf_rpc_cbor_rsp_ctx *ctx)
+int nrf_rpc_cbor_cmd_rsp(const struct nrf_rpc_group *group, uint8_t cmd,
+			 struct nrf_rpc_cbor_rsp_ctx *ctx)
 {
 	int err;
 	size_t len;
 	size_t rsp_size;
-	
+
 	if (cbor_encode_null(&ctx->encoder) != CborNoError) {
 		NRF_RPC_CBOR_DISCARD(*ctx);
 		return -ENOMEM;
@@ -95,7 +92,7 @@ int nrf_rpc_cbor_cmd_rsp(const struct nrf_rpc_group *group,
 				&ctx->in_packet, &rsp_size);
 
 	if (err < 0) {
-		cbor_buf_reader_init(&ctx->reader, dummy_buffer, 0);
+		cbor_buf_reader_init(&ctx->reader, "", 0);
 	} else {
 		cbor_buf_reader_init(&ctx->reader, ctx->in_packet, rsp_size);
 	}
@@ -111,6 +108,7 @@ int nrf_rpc_cbor_cmd_rsp(const struct nrf_rpc_group *group,
 	return err;
 }
 
+
 void nrf_rpc_cbor_cmd_no_err(const struct nrf_rpc_group *group, uint8_t cmd,
 			     struct nrf_rpc_cbor_ctx *ctx,
 			     nrf_rpc_cbor_handler_t handler,
@@ -122,14 +120,13 @@ void nrf_rpc_cbor_cmd_no_err(const struct nrf_rpc_group *group, uint8_t cmd,
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
 		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, group, cmd,
-			     NRF_RPC_PACKET_TYPE_CMD);
+			    NRF_RPC_PACKET_TYPE_CMD);
 	}
 }
 
-void nrf_rpc_cbor_cmd_rsp_no_err(
-					      const struct nrf_rpc_group *group,
-					      uint8_t cmd,
-					      struct nrf_rpc_cbor_rsp_ctx *ctx)
+
+void nrf_rpc_cbor_cmd_rsp_no_err(const struct nrf_rpc_group *group, uint8_t cmd,
+				 struct nrf_rpc_cbor_rsp_ctx *ctx)
 {
 	int err;
 
@@ -137,9 +134,10 @@ void nrf_rpc_cbor_cmd_rsp_no_err(
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
 		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, group, cmd,
-			     NRF_RPC_PACKET_TYPE_CMD);
+			    NRF_RPC_PACKET_TYPE_CMD);
 	}
 }
+
 
 int nrf_rpc_cbor_evt(const struct nrf_rpc_group *group, uint8_t evt,
 		     struct nrf_rpc_cbor_ctx *ctx)
@@ -157,6 +155,7 @@ int nrf_rpc_cbor_evt(const struct nrf_rpc_group *group, uint8_t evt,
 	return nrf_rpc_evt(group, evt, ctx->out_packet, len);
 }
 
+
 void nrf_rpc_cbor_evt_no_err(const struct nrf_rpc_group *group, uint8_t evt,
 			     struct nrf_rpc_cbor_ctx *ctx)
 {
@@ -166,7 +165,7 @@ void nrf_rpc_cbor_evt_no_err(const struct nrf_rpc_group *group, uint8_t evt,
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
 		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, group, evt,
-			     NRF_RPC_PACKET_TYPE_EVT);
+			    NRF_RPC_PACKET_TYPE_EVT);
 	}
 
 }
@@ -196,7 +195,7 @@ void nrf_rpc_cbor_rsp_no_err(struct nrf_rpc_cbor_ctx *ctx)
 	if (err < 0) {
 		NRF_RPC_ERR("Unhandled command send error %d", err);
 		nrf_rpc_err(err, NRF_RPC_ERR_SRC_SEND, NULL, NRF_RPC_ID_UNKNOWN,
-			     NRF_RPC_PACKET_TYPE_RSP);
+			    NRF_RPC_PACKET_TYPE_RSP);
 	}
 
 }
@@ -206,7 +205,7 @@ void nrf_rpc_cbor_decoding_done(CborValue *value)
 {
 	struct handler_proxy_ctx *ctx =
 		NRF_RPC_CONTAINER_OF(value, struct handler_proxy_ctx, value);
-	
+
 	nrf_rpc_decoding_done(ctx->in_packet);
 }
 
@@ -223,12 +222,14 @@ void _nrf_rpc_cbor_proxy_handler(const uint8_t *packet, size_t len,
 
 	cbor_buf_reader_init(&ctx.reader, packet, len);
 
-	if (cbor_parser_init(&ctx.reader.r, 0, &ctx.parser, &ctx.value) != CborNoError) {
+	if (cbor_parser_init(&ctx.reader.r, 0, &ctx.parser, &ctx.value) !=
+	    CborNoError) {
+
 		if (cbor_handler->decoding_done_required) {
 			nrf_rpc_decoding_done(packet);
 		}
-		nrf_rpc_err(-EBADMSG, NRF_RPC_ERR_SRC_RECV, NULL, NRF_RPC_ID_UNKNOWN,
-			     NRF_RPC_PACKET_TYPE_CMD);
+		nrf_rpc_err(-EBADMSG, NRF_RPC_ERR_SRC_RECV, NULL,
+			    NRF_RPC_ID_UNKNOWN, NRF_RPC_PACKET_TYPE_CMD);
 		return;
 	}
 	ctx.value.remaining = UINT32_MAX;

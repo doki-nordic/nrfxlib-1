@@ -51,7 +51,7 @@ struct _nrf_rpc_cbor_decoder {
 
 
 /** @brief Context for encoding and sending commands, events and responses.
- * 
+ *
  * Initialize it with @ref NRF_RPC_CBOR_ALLOC macro. Only `encoder` field is
  * significant for the API, other fields are internal.
  */
@@ -65,7 +65,7 @@ struct nrf_rpc_cbor_ctx {
 
 /** @brief Context for encoding commands, sending commands, receiving responses
  * and parsing them.
- * 
+ *
  * Initialize it with @ref NRF_RPC_CBOR_ALLOC macro. Only `encoder` and `value`
  * fields are significant for the API, other fields are internal.
  */
@@ -133,7 +133,7 @@ struct nrf_rpc_cbor_rsp_ctx {
  *
  * Macro may allocate some variables on stack, so it should be used at top level
  * of a function.
- * 
+ *
  * Memory is automatically deallocated when it is passed to any of the send
  * functions. If not @ref NRF_RPC_CBOR_DISCARD() can be used.
  *
@@ -176,7 +176,7 @@ int nrf_rpc_cbor_cmd(const struct nrf_rpc_group *group, uint8_t cmd,
 
 
 /** @brief Send a command and get response as an output parameter.
- * 
+ *
  * This variant of command send function outputs response as an output
  * parameter. Caller is responsible to call @ref nrf_rpc_cbor_decoding_done
  * just after response packet was decoded and can be deallocated.
@@ -195,7 +195,7 @@ int nrf_rpc_cbor_cmd_rsp(const struct nrf_rpc_group *group, uint8_t cmd,
 
 /** @brief Send a command, provide callback to handle response and pass any
  * error to an error handler.
- * 
+ *
  * This variant of command send function returns `void`, so sending error
  * returned from the transport layer is passed to the error handler.
  * Source of error is @ref NRF_RPC_ERR_SRC_SEND.
@@ -216,10 +216,10 @@ void nrf_rpc_cbor_cmd_no_err(const struct nrf_rpc_group *group, uint8_t cmd,
 
 /** @brief Send a command, get response as an output parameter and pass any
  * error to an error handler.
- * 
+ *
  * See both @ref nrf_rpc_cbor_cmd_rsp and @ref nrf_rpc_cbor_cmd_no_err for more
  * details on this variant of command send function.
- * 
+ *
  * TinyCBOR value will be initialized and invalid if function failed, so
  * `cbor_value_is_valid` can be used to check failure.
  *
@@ -245,7 +245,7 @@ int nrf_rpc_cbor_evt(const struct nrf_rpc_group *group, uint8_t evt,
 
 
 /** @brief Send an event and pass any error to an error handler.
- * 
+ *
  * This variant of event send function returns `void`, so sending error
  * returned from the transport layer is passed to the error handler.
  * Source of error is @ref NRF_RPC_ERR_SRC_SEND.
@@ -269,7 +269,7 @@ int nrf_rpc_cbor_rsp(struct nrf_rpc_cbor_ctx *ctx);
 
 
 /** @brief Send a response and pass any error to an error handler.
- * 
+ *
  * This variant of response send function returns `void`, so sending error
  * returned from the transport layer is passed to the error handler.
  * Source of error is @ref NRF_RPC_ERR_SRC_SEND.

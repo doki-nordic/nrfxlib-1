@@ -41,7 +41,7 @@ struct nrf_rpc_err_report;
 
 
 /** @brief Type of packet.
- * 
+ *
  * Used by @ref nrf_rpc_err_report to indicate which packet caused the problem.
  */
 enum nrf_rpc_packet_type {
@@ -55,7 +55,7 @@ enum nrf_rpc_packet_type {
 
 
 /** @brief Error source.
- * 
+ *
  * Used by @ref nrf_rpc_err_report to indicate when the problem occurred.
  */
 enum nrf_rpc_err_src {
@@ -89,11 +89,11 @@ typedef void (*nrf_rpc_ack_handler_t)(uint8_t id, void *handler_data);
  *
  * This callback will be called when received packet cannot be correctly
  * interpreted. Second case is when one of `_no_err` sending functions failed.
- * 
+ *
  * Callback can be assigned to specific group. If group in which error occurred
  * is known associated error handler is called. Later global error handler
  * provided in @ref nrf_rpc_init is called.
- * 
+ *
  * @see NRF_RPC_GROUP_DEFINE
  * @see nrf_rpc_init
  *
@@ -111,7 +111,7 @@ struct _nrf_rpc_decoder {
 
 
 /** @brief Defines a group of commands and events.
- * 
+ *
  * Created by @ref NRF_RPC_GROUP_DEFINE.
  *
  * Fields of this structure are used internally by nRF RPC and not intended to
@@ -131,6 +131,9 @@ struct nrf_rpc_group {
 /** @brief Error report.
  */
 struct nrf_rpc_err_report {
+
+	/** @brief Error code. */
+	int code;
 
 	/** @brief Group where the error occurred or NULL if it is unknown. */
 	const struct nrf_rpc_group *group;
@@ -237,7 +240,7 @@ struct nrf_rpc_err_report {
  *
  * Macro may allocate some variables on stack, so it should be used at top level
  * of a function.
- * 
+ *
  * Memory is automatically deallocated when it is passed to any of the send
  * functions. If not @ref NRF_RPC_DISCARD() can be used.
  *
@@ -261,7 +264,7 @@ struct nrf_rpc_err_report {
 
 
 /** @brief Initialize the nRF RPC
- * 
+ *
  * @param err_handler Error handler that will be called to report error in
  *                    nRF RPC.
  *
@@ -291,7 +294,7 @@ static inline int nrf_rpc_cmd(const struct nrf_rpc_group *group, uint8_t cmd,
 
 
 /** @brief Send a command and get response as an output parameter.
- * 
+ *
  * This variant of command send function outputs response as an output
  * parameter. Caller is responsible to call @ref nrf_rpc_decoding_done with
  * a response packet just after response packet was decoded and can be
@@ -315,7 +318,7 @@ static inline int nrf_rpc_cmd_rsp(const struct nrf_rpc_group *group,
 
 /** @brief Send a command, provide callback to handle response and pass any
  * error to an error handler.
- * 
+ *
  * This variant of command send function returns `void`, so sending error
  * returned from the transport layer is passed to the error handler.
  * Source of error is @ref NRF_RPC_ERR_SRC_SEND.
@@ -338,7 +341,7 @@ static inline void nrf_rpc_cmd_no_err(const struct nrf_rpc_group *group,
 
 /** @brief Send a command, get response as an output parameter and pass any
  * error to an error handler.
- * 
+ *
  * See both @ref nrf_rpc_cmd_rsp and @ref nrf_rpc_cmd_no_err for more
  * details on this variant of command send function.
  *
@@ -372,7 +375,7 @@ int nrf_rpc_evt(const struct nrf_rpc_group *group, uint8_t evt, uint8_t *packet,
 
 
 /** @brief Send an event and pass any error to an error handler.
- * 
+ *
  * This variant of event send function returns `void`, so sending error
  * returned from the transport layer is passed to the error handler.
  * Source of error is @ref NRF_RPC_ERR_SRC_SEND.
@@ -400,7 +403,7 @@ int nrf_rpc_rsp(uint8_t *packet, size_t len);
 
 
 /** @brief Send a response and pass any error to an error handler.
- * 
+ *
  * This variant of response send function returns `void`, so sending error
  * returned from the transport layer is passed to the error handler.
  * Source of error is @ref NRF_RPC_ERR_SRC_SEND.
@@ -419,17 +422,17 @@ void nrf_rpc_rsp_no_err(uint8_t *packet, size_t len);
  * @ref nrf_rpc_cmd_rsp or @ref nrf_rpc_cmd_rsp_no_err. Packet is
  * automatically deallocated after completetion of the response handler
  * function, so this `nrf_rpc_decoding_done` is not needed in response handler.
- * 
+ *
  * @param packet Packet which parsing has completed.
  */
 void nrf_rpc_decoding_done(const uint8_t *packet);
 
 
 /** @brief Report an error to nRP PRC error handler.
- * 
+ *
  * Main intention for exposing this function is to allow serialization layer
  * (e.g. TinyCBOR) report error to the same error handler as entire nRF RPC.
- * 
+ *
  * @param code        Negative error code.
  * @param src         Source of error.
  * @param group       Group where error happent or NULL if unknown.
