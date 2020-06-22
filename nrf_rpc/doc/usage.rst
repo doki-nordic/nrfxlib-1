@@ -22,7 +22,7 @@ Encoders
 Encoders encodes commands and events into serialized packets.
 Creating an encoder is similar for all packet type.
 The first step is allocation of the buffer using :c:macro:`NRF_RPC_ALLOC`.
-After that you can encode parameters directly into buffer or using `TinyCBOR <https://intel.github.io/tinycbor/current/>`_ library.
+After that you can encode parameters directly into buffer or using `TinyCBOR <https://github.com/zephyrproject-rtos/tinycbor>`_ library.
 In the last step packet is send using one of the sending function, e.g. :cpp:func:`nrf_rpc_cmd`, :cpp:func:`nrf_rpc_cbor_evt` or similar.
 
 As the result of sending command response is received, so it have to be parsed.
