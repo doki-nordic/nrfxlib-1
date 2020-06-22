@@ -163,7 +163,7 @@ struct nrf_rpc_err_report {
  * @param _ack_data    Opaque pointer for the `_ack_handler`.
  * @param _err_handler Handler of type @ref nrf_rpc_err_handler_t called when
  *                     error occurred in context of this group. Can be NULL if
- *                     group does not want to receive ACK notifications.
+ *                     group does not want to receive error notifications.
  */
 #define NRF_RPC_GROUP_DEFINE(_name, _strid, _ack_handler, _ack_data,	       \
 			     _err_handler)				       \
