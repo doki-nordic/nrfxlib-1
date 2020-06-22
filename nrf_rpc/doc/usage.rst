@@ -5,15 +5,15 @@ Implementing Remote Procedure Calls
 ###################################
 
 Specific API can be used remotely if encoders/decoders are provided for it.
-One one side there are encoders that encodes parameters and sends a commands or events.
-On the other side there are decoders that decodes and executes specific procedure.
+One one side there are encoders that encode parameters and send a commands or events.
+On the other side there are decoders that decode and execute specific procedure.
 
 Main goal of the nRF RPC API is to allow creation of encoders/decoders.
 
 Encoders and decoders are grouped.
 Each group contains functions related to a single API, e.g. Bluetooth, entropy, e.t.c.
 Group is created with the :c:macro:`NRF_RPC_GROUP_DEFINE`.
-Grouping allows logically divide the remote API, but also increase performance of nRF RPC.
+Grouping allows logically divide the remote API, but also increases performance of nRF RPC.
 
 
 Encoders
@@ -94,19 +94,17 @@ Following code shows how this function may look like.
 			(struct remote_inc_result *)handler_data;
 
 	 	if (!cbor_value_is_integer(value)) {
-			goto cbor_error_exit;
+			result->err = -EINVAL;
+			return;
 		}
 
 		cbor_err = cbor_value_get_int(value, &result->output);
 		if (cbor_err != CborNoError) {
-			goto cbor_error_exit;
+			result->err = -EINVAL;
+			return;
 		}
 
 		result->err = 0;
-		return;
-
-	cbor_error_exit:
-		result->err = -EINVAL;
 	}
 
 

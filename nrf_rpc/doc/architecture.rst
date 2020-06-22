@@ -105,7 +105,7 @@ Knowledge of its implementation is required to implement an alternate transport,
 Transport
 ---------
 
-Transport's main goal is to transfer packets between two sites.
+Transport's main goal is to transfer packets between two sides.
 The transport implementation can be selected by the configuration.
 
 Currently the default transport is `OpenAMP <https://github.com/OpenAMP/open-amp/>`_ on `Zephyr <https://www.zephyrproject.org/>`_.
