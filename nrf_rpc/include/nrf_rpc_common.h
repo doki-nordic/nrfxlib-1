@@ -101,6 +101,13 @@ extern "C" {
 #define NRF_RPC_ASSERT(_expr) \
 	__NRF_RPC_ASSERT(_expr)
 
+struct _nrf_rpc_auto_arr_item {
+	const char *key;
+	const void *data;
+	struct _nrf_rpc_auto_arr_item *next;
+	bool is_array;
+};
+
 /** @brief Creates new automatically registered array.
  *
  * @param _name      Name of the array. Can be used later for
@@ -109,11 +116,12 @@ extern "C" {
  *                   @a NRF_RPC_AUTO_ARR_ITEM.
  */
 #define NRF_RPC_AUTO_ARR(_name, _array_key)				       \
-	const uint8_t NRF_RPC_CONCAT(_name, _auto_arr_end) __used	       \
-	__attribute__((__section__(".nrf_rpc." _array_key ".c")));	       \
-	const uint8_t *const _name __used				       \
-	__attribute__((__section__(".nrf_rpc." _array_key ".a"))) =	       \
-		&NRF_RPC_CONCAT(_name, _auto_arr_end)
+void **_name; \
+__attribute__((constructor)) \
+static void NRF_RPC_CONCAT(_name, _auto_arr)(void) { \
+	static struct _nrf_rpc_auto_arr_item item; \
+	_nrf_rpc_auto_arr_item_init(&item, &_name, _array_key ".a", true); \
+} \
 
 /** @brief Adds new variable to the array.
  *
@@ -123,8 +131,15 @@ extern "C" {
  * @param _var_key   String item key.
  */
 #define NRF_RPC_AUTO_ARR_ITEM(_type, _name, _array_key, _item_key)	       \
-	_type _name __used						       \
-	__attribute__((__section__(".nrf_rpc." _array_key ".b." _item_key)))
+__attribute__((constructor)) \
+static void NRF_RPC_CONCAT(_name, _auto_arr_init)(void) { \
+	extern _type _name; \
+	static struct _nrf_rpc_auto_arr_item item; \
+	_nrf_rpc_auto_arr_item_init(&item, (void *)&_name, _array_key ".b." _item_key, false); \
+} \
+_type _name
+
+void _nrf_rpc_auto_arr_item_init(struct _nrf_rpc_auto_arr_item *item, const void *data, const char *key, bool is_array);
 
 /** @brief Iterate over array items.
  *
@@ -136,10 +151,9 @@ extern "C" {
  * @param _type      Type of items in array.
  */
 #define NRF_RPC_AUTO_ARR_FOR(_it, _var, _array_ptr, _type)		       \
-	(_var) = (_type *)((const uint8_t *const *)(_array_ptr) + 1);	       \
-		(const uint8_t *const)_var <				       \
-			*(const uint8_t *const *)(_array_ptr);		       \
-		(_var) = (_type *)(_var) + 1, (void)_it
+	(_it) = *(void ***)(_array_ptr), (_var) = *(_type **)(_it);	       \
+		(_var) != NULL;    \
+		(*(_type ***)&(_it))++, (_var) = *(_type **)(_it)
 
 /** @brief Get item from the array.
  *
@@ -148,7 +162,7 @@ extern "C" {
  * @param _type      Type of items in array.
  */
 #define NRF_RPC_AUTO_ARR_GET(_array_ptr, _index, _type)			       \
-	(((_type *)((const uint8_t *const *)(_array_ptr) + 1))[_index])
+	(*((*(_type ***)_array_ptr)[_index]))
 
 /* Error codes definitions if they are not defined by the platform */
 #ifndef ENOENT

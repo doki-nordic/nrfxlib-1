@@ -100,6 +100,7 @@ static struct nrf_rpc_cmd_ctx *cmd_ctx_alloc(void)
 
 static void cmd_ctx_free(struct nrf_rpc_cmd_ctx *ctx)
 {
+	NRF_RPC_DBG("Command context %d free", ctx->id);
 	nrf_rpc_os_tls_set(NULL);
 	nrf_rpc_os_ctx_pool_release(ctx->id);
 }
@@ -386,7 +387,7 @@ static void receive_handler(const uint8_t *packet, size_t len)
 	}
 
 	NRF_RPC_DBG("Received %d bytes packet from %d to %d, type 0x%02X, "
-		    "cmd/evt/cnt 0x%02X, grp %d (%s)", len, hdr.src, hdr.dst,
+		    "cmd/evt/cnt 0x%02X, grp %d (%s)", (int)len, hdr.src, hdr.dst,
 		    hdr.type, hdr.id, hdr.group_id,
 		    (group != NULL) ? group->strid : "unknown");
 

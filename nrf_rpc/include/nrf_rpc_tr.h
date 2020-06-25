@@ -11,6 +11,10 @@
 
 #include <nrf_rpc_rpmsg.h>
 
+#elif defined(CONFIG_NRF_RPC_TR_SHMEM)
+
+#include <nrf_rpc_shmem.h>
+
 #elif defined(CONFIG_NRF_RPC_TR_CUSTOM)
 
 #include CONFIG_NRF_RPC_TR_CUSTOM_INCLUDE
