@@ -800,6 +800,7 @@ int nrf_rpc_init(nrf_rpc_err_handler_t err_handler)
 	return err;
 }
 
+
 /** Report an error that cannot be reported as a function return value */
 void nrf_rpc_err(int code, enum nrf_rpc_err_src src,
 		 const struct nrf_rpc_group *group, uint8_t id,
@@ -834,3 +835,18 @@ void nrf_rpc_err(int code, enum nrf_rpc_err_src src,
 		global_err_handler(&report);
 	}
 }
+
+
+#ifndef nrf_rpc_tr_alloc_tx_buf
+
+uint8_t *_nrf_rpc_alloc(size_t len)
+{
+	uint8_t *packet;
+
+	NRF_RPC_ASSERT(len < 0x70000000);
+
+	nrf_rpc_tr_alloc_tx_buf(&packet, _NRF_RPC_HEADER_SIZE + len);
+	return &packet[_NRF_RPC_HEADER_SIZE];
+}
+
+#endif
