@@ -135,7 +135,7 @@ __attribute__((constructor)) \
 static void NRF_RPC_CONCAT(_name, _auto_arr_init)(void) { \
 	extern _type _name; \
 	static struct _nrf_rpc_auto_arr_item item; \
-	_nrf_rpc_auto_arr_item_init(&item, (void *)&_name, _array_key ".b." _item_key, false); \
+	_nrf_rpc_auto_arr_item_init(&item, (void *)&_name, _array_key ".i." _item_key, false); \
 } \
 _type _name
 
