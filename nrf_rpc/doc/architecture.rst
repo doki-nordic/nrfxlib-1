@@ -1,135 +1,147 @@
-.. architecture:
-
+.. _nrf_rpc_architecture:
 
 Architecture
 ############
 
 The following picture gives an overview of the nRF RPC architecture:
 
-.. image:: img/layers.svg
-   :alt: nRF RPC Architecture Layers
+.. figure:: img/layers.svg
+   :alt: nRF RPC architecture layers
    :align: center
 
+   nRF RPC architecture layers
 
 Types of communication
 ======================
 
-Calls can be done in one of two ways: using a command/response or an event.
+You can issue the calls in one of two ways: using a command/response or an event.
 
-**Command and response** are intended to be used for a synchronous function calls.
+A **command and response** is intended to be used for synchronous function calls.
 The caller sends the command to the other side and waits for a response.
 The response is sent after the remote function returns on the remote core.
 The following image shows an example of the command and response flow.
 
-.. image:: img/cmd_flow.svg
-   :alt: nRF RPC Command/Response flow
+.. figure:: img/cmd_flow.svg
+   :alt: nRF RPC command and response flow
    :align: center
 
-**Events** are intended to be used for an asynchronous function calls.
-The caller sends an event to the other side and returns immediately if there is free thread in thread pool (see :ref:`nrf_rpc_architecture_threads` section), otherwise it waits for available thread.
-It is not possible to return anything from the remote side after receiving an Event, but it is possible to send an Event in opposite direction.
+   nRF RPC command and response flow
+
+**Events** are intended to be used for asynchronous function calls.
+The caller sends an event to the other side and returns immediately if there is a free thread in the thread pool.
+See the :ref:`nrf_rpc_architecture_threads` section.
+Otherwise, it waits for an available thread.
+It is not possible to return anything from the remote side after receiving an event, but it is possible to send an event in the opposite direction.
 The following image shows an example of the event flow.
 
-.. image:: img/evt_flow.svg
-   :alt: nRF RPC Event flow
+.. figure:: img/evt_flow.svg
+   :alt: nRF RPC event flow
    :align: center
+
+   nRF RPC event flow
 
 .. _nrf_rpc_architecture_threads:
 
 Threads
 =======
 
-When a remote procedure call is received, it must be executed in context of a thread.
-For this reason each side of the nRF RPC contains a thread pool.
-It is OS-dependent and it is implemented in OS abstraction layer.
-Number of threads in the thread pool is configurable.
+When a remote procedure call is received, it must be executed in the context of a thread.
+For this reason, each side of nRF RPC contains a thread pool.
+The thread pool is OS-dependent and implemented in the OS abstraction layer.
+The number of threads in a thread pool is configurable.
 
-When a caller wants to call a remote procedure, the nRF RPC checks if there is a thread available in a pool.
-If there is not, then it waits until one becomes available, blocking the caller.
-After that nRF RPC sends a packet and it is executed by available thread from a thread pool.
-In the case of a Command being received, a Response is send directly to a waiting thread, so no new thread is allocated for a response.
+When a caller wants to call a remote procedure, nRF RPC checks if there is a thread available in a pool.
+If there is none, then it waits until one becomes available, blocking the caller.
+After that, nRF RPC sends a packet and it is executed by an available thread from a thread pool.
+In the case of a command being received, a response is sent directly to a waiting thread, so no new thread is allocated for a response.
 
-Sample command/response diagrams are on the image below.
+The following image presents sample command and response flows.
 
-.. image:: img/cmd_simple.svg
-   :alt: nRF RPC Simple Command flow
+.. figure:: img/cmd_simple.svg
+   :alt: nRF RPC simple command flow
    :align: center
 
-A thread waiting for a response may be reused to receive a new incoming command from the remote thread that the local thread is waiting for, e.g. when callback is called synchronously.
-Below diagram shows that situation.
+   nRF RPC simple command flow
 
-.. image:: img/cmd_recursive.svg
-   :alt: nRF RPC Simple Command flow
+A thread waiting for a response can be reused to receive a new incoming command from the remote thread that the local thread is waiting for, e.g. when a callback is called synchronously.
+The following diagram demonstrates this situation.
+
+.. figure:: img/cmd_recursive.svg
+   :alt: nRF RPC recursive command flow
    :align: center
 
-Events always reserve a new thread from remote thread pool.
-Special attention is required when sending multiple events one after another, because each event will reserve a new thread. Sending events too fast may consume entire thread pool and as the result block all the outgoing commands and events.
-Sample events are shown on diagram below.
+   nRF RPC recursive command flow
 
-.. image:: img/evt_simple.svg
-   :alt: nRF RPC Simple Command flow
+Events always reserve a new thread from the remote thread pool.
+Pay special attention when sending multiple events one after another, because each event reserves a new thread.
+Sending events too fast might consume the entire thread pool and, as a result, block all outgoing commands and events.
+Sample events are shown in the diagram below.
+
+.. figure:: img/evt_simple.svg
+   :alt: nRF RPC simple event flow
    :align: center
 
+   nRF RPC simple event flow
 
 Error handling
 ==============
 
-There are two kind of errors that can happen.
+Two kinds of errors might occur when using this library.
 
-1. Error during parsing of incoming packet.
-   This kind of error cannot be directly returned to the user e.g. as a return value.
-   User is informed about such errors via a callback.
-   First, if a group in which error happen is known then group error callback is called.
-   Second, a global error handler (provided to :cpp:func:`nrf_rpc_init` function) is called.
-   Malformed packet is something that should not normally happen, because transport layer is responsible for reliable packet transferring.
-   Errors should be treated as a serious problems from which nRF RPC probably will not recover.
+ Error during parsing of an incoming packet
+    This kind of error cannot be directly returned to the user, e.g. as a return value.
+    The user is informed about such errors through a callback.
+    First, if a group in which the error happens is known, then the group error callback is called.
+    Second, a global error handler (provided to the :cpp:func:`nrf_rpc_init` function) is called.
+    A malformed packet is something that should not normally happen, because the transport layer is responsible for reliable packet transferring.
+    Such errors are a serious problem from which nRF RPC will probably not recover.
 
-2. Error during packet sending.
-   This kind of errors are passed to the caller as a return value.
-   They indicate that the transport layer is not able to transfer this packet.
-   They should be also treated as a serious problems from which nRF RPC probably will not recover, because missing packets may put nRF RPC in undefined state.
+ Error during packet sending
+    This kind of errors is passed to the caller as a return value.
+    They indicate that the transport layer is not able to transfer a packet.
+    Such errors are a serious problem from which nRF RPC will probably not recover, because missing packets might put nRF RPC in an undefined state.
 
-It is also possible to pass errors during packet sending to an error handler by using ``_no_err`` variant of sending functions.
 
+You can also pass errors during packet sending to an error handler by using a ``_no_err`` variant of sending functions.
 
 Lower layers
 ============
 
 Lower layers of nRF RPC are OS-dependent.
-They are responsible for a communion with a transport medium, managing a thread pool, thread synchronization and communication and logging.
+They are responsible for communicating with a transport medium, managing a thread pool, thread synchronization, communication, and logging.
 
-NOTE: It is not required to know how the lower layers is implemented when using the nRF RPC API.
-Knowledge of its implementation is required to implement an alternate transport, or to port to a different operating system.
-
+.. note::
+   Detailed knowledge about how the lower layers are implemented is not required when using the nRF RPC API.
+   However, this knowledge is required to implement an alternative transport or to port to a different operating system.
 
 Transport
 ---------
 
-Transport's main goal is to transfer packets between two sides.
-The transport implementation can be selected by the configuration.
+The main role of a transport is to transfer packets between two sides.
+You can select the transport implementation using the library configuration.
 
-Currently the default transport is `OpenAMP <https://github.com/OpenAMP/open-amp/>`_ on `Zephyr <https://www.zephyrproject.org/>`_.
+Currently the default transport is `OpenAMP`_ on `Zephyr`_.
 
-The template header describing the nRF RPC transport APIS is ``template/nrf_rpc_tr_tmpl.h``.
-Header file ``include/rp_trans.h`` is responsible for including right transport header file based on the configuration.
-
+The template header describing the nRF RPC transport API is :file:`template/nrf_rpc_tr_tmpl.h`.
+The header file :file:`include/rp_trans.h` is responsible for including the right transport header file based on the configuration.
 
 Operating system abstraction
 ----------------------------
 
-Operating system abstraction provides functionality for nRF RPC that depends on system.
-It manages a thread pool, do thread synchronization and communication.
+The operating system abstraction provides functionality for nRF RPC that depends on the system.
+It manages the thread pool, thread synchronization, and communication.
 
-The template header describing OS abstraction is ``template/nrf_rpc_os_tmpl.h``.
+The template header describing the OS abstraction is :file:`template/nrf_rpc_os_tmpl.h`.
 
 
 Logging
 -------
 
-nRF RPC logs some activities that it do.
-It allows simpler tracking, diagnosis and also debugging.
-It provides four levels for logging: errors, warnings, information and debug.
-Error logs indicate some serious error, so they should be enabled if possible.
-Debug logs should be enabled only to track some problem.
+nRF RPC logs some of its activities.
+This allows for tracking, diagnosis, and debugging.
+It provides four levels for logging: errors, warnings, information, and debug.
 
-The template header describing logger is ``template/nrf_rpc_log_tmpl.h``.
+Error logs indicate serious errors, so they should be enabled if possible.
+Debug logs should be enabled only to track specific problems.
+
+The template header describing the logger is :file:`template/nrf_rpc_log_tmpl.h`.
