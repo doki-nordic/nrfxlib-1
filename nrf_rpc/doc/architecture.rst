@@ -74,7 +74,7 @@ The following diagram demonstrates this situation.
 
 Events always reserve a new thread from the remote thread pool.
 Pay special attention when sending multiple events one after another, because each event reserves a new thread.
-Sending events too fast might consume the entire thread pool and, as a result, block all outgoing commands and events.
+Sending events too fast might consume the entire thread pool and, as a result, block all outgoing commands and events until any in the thread pool thread becomes available.
 Sample events are shown in the diagram below.
 
 .. figure:: img/evt_simple.svg
@@ -89,7 +89,7 @@ Error handling
 Two kinds of errors might occur when using this library.
 
  Error during parsing of an incoming packet
-    These kinds of error cannot be directly returned to the user, e.g. as a return value.
+    These kinds of error cannot be directly returned to the user as a return value.
     The user is informed about such errors through a callback.
     First, if the group in which the error happened is known, then a group error callback is called.
     Second, a global error handler (provided to the :cpp:func:`nrf_rpc_init` function) is called.
