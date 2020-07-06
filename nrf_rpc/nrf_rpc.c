@@ -297,7 +297,7 @@ static uint8_t parse_incoming_packet(struct nrf_rpc_cmd_ctx *cmd_ctx,
 		/* Receive handler will not pass a response if cmd context is
 		 * unknown, so ASSERT is enough.
 		 */
-		NRF_RPC_ASSERT(cmd_ctx != NULL)
+		NRF_RPC_ASSERT(cmd_ctx != NULL);
 		NRF_RPC_DBG("Response received");
 		return hdr.type;
 	}

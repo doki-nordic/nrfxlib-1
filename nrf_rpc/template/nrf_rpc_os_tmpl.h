@@ -69,7 +69,7 @@ void nrf_rpc_os_thread_pool_send(const uint8_t *data, size_t len);
  *
  * @return      0 on success or negative error code.
  */
-static inline int nrf_rpc_os_event_init(struct nrf_rpc_os_event *event);
+int nrf_rpc_os_event_init(struct nrf_rpc_os_event *event);
 
 /** @brief Set an event.
  *
