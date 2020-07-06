@@ -120,7 +120,7 @@ extern "C" {
  * @param _type      Type of the variable.
  * @param _name      Name of the variable.
  * @param _array_key String array unique key.
- * @param _var_key   String item key.
+ * @param _item_key  String item key.
  */
 #define NRF_RPC_AUTO_ARR_ITEM(_type, _name, _array_key, _item_key)	       \
 	_type _name __used						       \
