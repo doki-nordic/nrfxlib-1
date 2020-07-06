@@ -21,10 +21,10 @@ Encoders
 Encoders encode commands and events into serialized packets.
 Creating an encoder is similar for all packet types.
 The first step is the allocation of a buffer using :c:macro:`NRF_RPC_ALLOC`.
-After that, you can encode parameters directly into a buffer or use the `TinyCBOR`_ library.
+After that, you can encode parameters directly into the buffer or use the `TinyCBOR`_ library.
 In the last step, the packet is sent using one of the sending functions: :cpp:func:`nrf_rpc_cmd`, :cpp:func:`nrf_rpc_cbor_evt`, or similar.
 
-As a result of sending a command, a response is received, which then must be parsed.
+After sending the command a response is received, so it has to be parsed.
 There are two ways to parse a response.
 
 The first way is to provide a response handler in the parameters of :cpp:func:`nrf_rpc_cmd` or :cpp:func:`nrf_rpc_cbor_cmd`.
@@ -38,7 +38,7 @@ After parsing it, the :cpp:func:`nrf_rpc_decoding_done` or :cpp:func:`nrf_rpc_cb
 Events have no response, so they need no additional action after sending them.
 
 The following is a sample command encoder created using the nRF RPC TinyCBOR API.
-The function remotely adds ``1`` to the ``input`` parameter and puts the result to the ``output`` parameter.
+The function remotely adds ``1`` to the ``input`` parameter and puts the result in the ``output`` parameter.
 It returns 0 on success or a negative error code if communication with the remote side failed.
 
 .. code-block:: c
@@ -82,7 +82,7 @@ It returns 0 on success or a negative error code if communication with the remot
 	}
 
 The above code uses the ``remote_inc_rsp`` function to parse the response.
-The following code shows how this function can look like.
+The following code shows how this function may look.
 
 .. code-block:: c
 

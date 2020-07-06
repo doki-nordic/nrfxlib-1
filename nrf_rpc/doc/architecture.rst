@@ -89,11 +89,11 @@ Error handling
 Two kinds of errors might occur when using this library.
 
  Error during parsing of an incoming packet
-    This kind of error cannot be directly returned to the user, e.g. as a return value.
+    These kinds of error cannot be directly returned to the user, e.g. as a return value.
     The user is informed about such errors through a callback.
-    First, if a group in which the error happens is known, then the group error callback is called.
+    First, if the group in which the error happened is known, then a group error callback is called.
     Second, a global error handler (provided to the :cpp:func:`nrf_rpc_init` function) is called.
-    A malformed packet is something that should not normally happen, because the transport layer is responsible for reliable packet transferring.
+    A malformed packets should not normally happen, because the transport layer is responsible for reliable packet transferring.
     Such errors are a serious problem from which nRF RPC will probably not recover.
 
  Error during packet sending
@@ -107,7 +107,7 @@ You can also pass errors during packet sending to an error handler by using a ``
 Lower layers
 ============
 
-Lower layers of nRF RPC are OS-dependent.
+The lower layers of nRF RPC are OS-dependent.
 They are responsible for communicating with a transport medium, managing a thread pool, thread synchronization, communication, and logging.
 
 .. note::
@@ -128,7 +128,7 @@ The header file :file:`include/rp_trans.h` is responsible for including the righ
 Operating system abstraction
 ----------------------------
 
-The operating system abstraction provides functionality for nRF RPC that depends on the system.
+The operating system abstraction provides functionality for nRF RPC that depends on an operating system.
 It manages the thread pool, thread synchronization, and communication.
 
 The template header describing the OS abstraction is :file:`template/nrf_rpc_os_tmpl.h`.
