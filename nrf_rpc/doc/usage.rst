@@ -24,7 +24,7 @@ The first step is the allocation of a buffer using :c:macro:`NRF_RPC_ALLOC`.
 After that, you can encode parameters directly into the buffer or use the `TinyCBOR`_ library.
 In the last step, the packet is sent using one of the sending functions: :cpp:func:`nrf_rpc_cmd`, :cpp:func:`nrf_rpc_cbor_evt`, or similar.
 
-After sending the command a response is received, so it has to be parsed.
+After sending the command, a response is received, so it must be parsed.
 There are two ways to parse a response.
 
 The first way is to provide a response handler in the parameters of :cpp:func:`nrf_rpc_cmd` or :cpp:func:`nrf_rpc_cbor_cmd`.
@@ -82,7 +82,7 @@ It returns 0 on success or a negative error code if communication with the remot
 	}
 
 The above code uses the ``remote_inc_rsp`` function to parse the response.
-The following code shows how this function may look.
+The following code shows how this function might look.
 
 .. code-block:: c
 
