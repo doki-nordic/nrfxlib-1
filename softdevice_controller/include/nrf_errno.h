@@ -26,6 +26,7 @@ extern "C" {
 #define NRF_ENOMEM          12
 #define NRF_EACCES          13
 #define NRF_EFAULT          14
+#define NRF_ENODEV          19  /**< No such device */
 #define NRF_EINVAL          22
 #define NRF_EMFILE          24
 #define NRF_EAGAIN          35
@@ -42,6 +43,7 @@ extern "C" {
 #define NRF_EISCONN         56
 #define NRF_ENOTCONN        57
 #define NRF_ETIMEDOUT       60
+#define NRF_EBADMSG         77  /**< Bad message */
 #define NRF_ENOBUFS         105
 
 #define NRF_EHOSTDOWN       112 //< Host is down.

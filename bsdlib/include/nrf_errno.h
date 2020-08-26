@@ -25,6 +25,7 @@ extern "C" {
 #define NRF_ENOMEM          12  /**< Cannot allocate memory */
 #define NRF_EACCES          13  /**< Permission denied */
 #define NRF_EFAULT          14  /**< Bad address */
+#define NRF_ENODEV          19  /**< No such device */
 #define NRF_EINVAL          22  /**< Invalid argument */
 #define NRF_EMFILE          24  /**< Too many open files */
 #define NRF_ENOSPC          28  /**< No space left on device */
@@ -45,6 +46,7 @@ extern "C" {
 #define NRF_EISCONN         56  /**< Transport endpoint is already connected */
 #define NRF_ENOTCONN        57  /**< Transport endpoint is not connected */
 #define NRF_ETIMEDOUT       60  /**< Connection timed out */
+#define NRF_EBADMSG         77  /**< Bad message */
 #define NRF_ENOBUFS         105 /**< No buffer space available */
 
 #define NRF_EHOSTDOWN       112 /**< Host is down */

@@ -24,6 +24,7 @@ extern "C" {
 #define NRF_ENOMEM          12  ///< Not enough memory
 #define NRF_EACCES          13  ///< Access error, not accessible using current privileges
 #define NRF_EFAULT          14  ///< Bad address
+#define NRF_ENODEV          19  /**< No such device */
 #define NRF_EINVAL          22  ///< Invalid argument
 #define NRF_EAGAIN          35  ///< Resource temporary unavailable, try again later
 #define NRF_EPROTOTYPE      41  ///< Protocol type wrong for socket
@@ -39,6 +40,7 @@ extern "C" {
 #define NRF_EISCONN         56  ///< Connection is already connected
 #define NRF_ENOTCONN        57  ///< Connection is not connected
 #define NRF_ETIMEDOUT       60  ///< Connection timed out
+#define NRF_EBADMSG         77  /**< Bad message */
 #define NRF_ENOBUFS         105 ///< No buffer space available
 
 #define NRF_EHOSTDOWN       112 ///< Host is down
